@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Shopify Backend Test UI</title>
+        <style>
+            body {
+                font-family: sans-serif;
+                margin: 20px;
+                background-color: #f4f4f4;
+            }
+            .container {
+                background-color: #fff;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }
+            input[type="text"],
+            button,
+            select {
+                padding: 10px;
+                margin-bottom: 10px;
+                border-radius: 4px;
+                border: 1px solid #ddd;
+                box-sizing: border-box;
+            }
+            button {
+                cursor: pointer;
+                background-color: #007bff;
+                color: white;
+                border-color: #007bff;
+            }
+            button:hover {
+                background-color: #0056b3;
+            }
+            pre {
+                background-color: #eee;
+                padding: 15px;
+                border-radius: 4px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                max-height: 400px;
+                overflow-y: auto;
+            }
+            .hidden {
+                display: none;
+            }
+            .loader {
+                border: 5px solid #f3f3f3;
+                border-top: 5px solid #3498db;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                animation: spin 1s linear infinite;
+                margin-bottom: 10px;
+            }
+            @keyframes spin {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+            h2,
+            h3 {
+                color: #333;
+            }
+            .endpoint-section {
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #eee;
+            }
+            label {
+                display: inline-block;
+                margin-bottom: 5px;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>Shopify Backend Test Interface</h2>
+
+            <div class="endpoint-section">
+                <h3>1. Connect to Shopify Store (OAuth Flow)</h3>
+                <label for="shopDomainConnect"
+                    >Shop Domain (e.g., your-store.myshopify.com):</label
+                ><br />
+                <input type="text" id="shopDomainConnect" size="50" /><br />
+                <button onclick="connectShopify()">
+                    Connect Shopify Store
+                </button>
+                <p>
+                    <small
+                        >This will redirect you to Shopify for authorization.
+                        After approval, Shopify redirects to the backend's
+                        `/callback`. The backend will then log the raw access
+                        token (check backend console) and store it in the
+                        database. For now, you'll need to manually copy the shop
+                        domain and the logged raw access token to Section 2 for
+                        API testing.
+                    </small>
+                </p>
+            </div>
+
+            <div class="endpoint-section">
+                <h3>2. API Credentials for Data Fetching</h3>
+                <p>
+                    <small
+                        ><b>Note:</b> Currently, you need to manually enter the
+                        access token obtained from the OAuth flow (see backend
+                        logs). This requirement will be removed once the backend
+                        is updated to fetch tokens automatically from the
+                        database.</small
+                    >
+                </p>
+                <label for="shopDomainAPI">Shop Domain:</label><br />
+                <input
+                    type="text"
+                    id="shopDomainAPI"
+                    size="50"
+                    placeholder="e.g., teststorshivansh.myshopify.com"
+                /><br />
+                <label for="accessTokenAPI"
+                    >Access Token (from backend logs after OAuth):</label
+                ><br />
+                <input
+                    type="text"
+                    id="accessTokenAPI"
+                    size="70"
+                    placeholder="Enter raw access token obtained from callback logs"
+                /><br />
+            </div>
+
+            <div class="endpoint-section">
+                <h3>3. Fetch Shopify Data</h3>
+                <label for="customQuery"
+                    >Custom Query (optional, e.g.,
+                    <code>title:MyProduct</code> or
+                    <code>financial_status:paid</code>):</label
+                ><br />
+                <input type="text" id="customQuery" size="70" /><br />
+                <label for="cursor">Cursor (optional, for pagination):</label
+                ><br />
+                <input type="text" id="cursor" size="70" /><br />
+                <label for="first">First N items (default 10):</label><br />
+                <input
+                    type="text"
+                    id="first"
+                    size="10"
+                    value="10"
+                /><br /><br />
+
+                <button onclick="fetchData('/api/data/shopify/products')">
+                    Get Products
+                </button>
+                <button onclick="fetchData('/api/data/shopify/orders')">
+                    Get Orders
+                </button>
+                <button onclick="fetchData('/api/data/shopify/customers')">
+                    Get Customers
+                </button>
+                <br /><br />
+                <label for="orderIdForTransactions"
+                    >Order ID (for Transactions, e.g.,
+                    <code>gid://shopify/Order/XYZ</code>):</label
+                ><br />
+                <input
+                    type="text"
+                    id="orderIdForTransactions"
+                    size="70"
+                /><br />
+                <button onclick="fetchTransactions()">
+                    Get Transactions for Order
+                </button>
+            </div>
+
+            <h3>4. API Response</h3>
+            <div id="loader" class="loader hidden"></div>
+            <pre id="responseArea">API responses will appear here...</pre>
+        </div>
+
+        <script>
+            const backendBaseUrl = "YOUR_NGROK_HTTPS_URL"; // IMPORTANT: Replace with your ngrok HTTPS URL
+
+            const shopDomainConnectInput =
+                document.getElementById("shopDomainConnect");
+            const shopDomainAPIInput = document.getElementById("shopDomainAPI");
+            const accessTokenAPIInput =
+                document.getElementById("accessTokenAPI");
+
+            const customQueryInput = document.getElementById("customQuery");
+            const cursorInput = document.getElementById("cursor");
+            const firstInput = document.getElementById("first");
+            const orderIdInput = document.getElementById(
+                "orderIdForTransactions"
+            );
+
+            const responseArea = document.getElementById("responseArea");
+            const loader = document.getElementById("loader");
+
+            function connectShopify() {
+                const shopDomain = shopDomainConnectInput.value.trim();
+                if (!shopDomain) {
+                    alert("Please enter a shop domain.");
+                    return;
+                }
+                if (
+                    !backendBaseUrl ||
+                    backendBaseUrl === "YOUR_NGROK_HTTPS_URL"
+                ) {
+                    alert(
+                        "Please configure the backendBaseUrl in the script tag with your ngrok HTTPS URL."
+                    );
+                    return;
+                }
+                const connectUrl = `${backendBaseUrl}/api/v1/auth/connect?shop=${encodeURIComponent(
+                    shopDomain
+                )}`;
+                console.log("Opening in new tab:", connectUrl);
+                window.open(connectUrl, "_blank");
+            }
+
+            async function fetchData(apiEndpoint) {
+                const shop = shopDomainAPIInput.value.trim();
+                const accessToken = accessTokenAPIInput.value.trim();
+                const customQuery = customQueryInput.value.trim() || null;
+                const cursor = cursorInput.value.trim() || null;
+                const first = parseInt(firstInput.value.trim()) || 10;
+
+                if (
+                    !backendBaseUrl ||
+                    backendBaseUrl === "YOUR_NGROK_HTTPS_URL"
+                ) {
+                    alert(
+                        "Please configure the backendBaseUrl in the script tag."
+                    );
+                    return;
+                }
+                if (!shop || !accessToken) {
+                    alert(
+                        "Please enter Shop Domain and Access Token in Section 2."
+                    );
+                    return;
+                }
+
+                loader.classList.remove("hidden");
+                responseArea.textContent = "Loading...";
+
+                const requestBody = {
+                    shop: shop,
+                    access_token: accessToken,
+                    first: first,
+                    cursor: cursor,
+                    custom_query: customQuery,
+                };
+
+                console.log(
+                    "Requesting URL:",
+                    `${backendBaseUrl}${apiEndpoint}`
+                );
+                console.log(
+                    "Request Body:",
+                    JSON.stringify(requestBody, null, 2)
+                );
+
+                try {
+                    const response = await fetch(
+                        `${backendBaseUrl}${apiEndpoint}`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify(requestBody),
+                        }
+                    );
+
+                    const data = await response.json();
+                    responseArea.textContent = JSON.stringify(data, null, 2);
+
+                    if (!response.ok) {
+                        console.error("API Error:", data);
+                    }
+                } catch (error) {
+                    console.error("Fetch Error:", error);
+                    responseArea.textContent = `Error: ${error.message}\n\nCheck console for more details. Is the backend running and accessible at ${backendBaseUrl}?`;
+                } finally {
+                    loader.classList.add("hidden");
+                }
+            }
+
+            async function fetchTransactions() {
+                const shop = shopDomainAPIInput.value.trim();
+                const accessToken = accessTokenAPIInput.value.trim();
+                const orderId = orderIdInput.value.trim();
+                const first = parseInt(firstInput.value.trim()) || 5; // Transactions might want fewer by default
+                const cursor = cursorInput.value.trim() || null;
+
+                if (
+                    !backendBaseUrl ||
+                    backendBaseUrl === "YOUR_NGROK_HTTPS_URL"
+                ) {
+                    alert(
+                        "Please configure the backendBaseUrl in the script tag."
+                    );
+                    return;
+                }
+                if (!shop || !accessToken) {
+                    alert(
+                        "Please enter Shop Domain and Access Token in Section 2."
+                    );
+                    return;
+                }
+                if (!orderId) {
+                    alert("Please enter an Order ID to fetch transactions.");
+                    return;
+                }
+
+                loader.classList.remove("hidden");
+                responseArea.textContent = "Loading...";
+
+                const requestBody = {
+                    shop: shop,
+                    access_token: accessToken,
+                    order_id: orderId,
+                    first: first,
+                    cursor: cursor,
+                    // custom_query is not typically used for direct transaction fetching by order_id
+                };
+
+                console.log(
+                    "Requesting URL:",
+                    `${backendBaseUrl}/api/data/shopify/transactions`
+                );
+                console.log(
+                    "Request Body for Transactions:",
+                    JSON.stringify(requestBody, null, 2)
+                );
+
+                try {
+                    const response = await fetch(
+                        `${backendBaseUrl}/api/data/shopify/transactions`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify(requestBody),
+                        }
+                    );
+
+                    const data = await response.json();
+                    responseArea.textContent = JSON.stringify(data, null, 2);
+
+                    if (!response.ok) {
+                        console.error("API Error:", data);
+                    }
+                } catch (error) {
+                    console.error("Fetch Error:", error);
+                    responseArea.textContent = `Error: ${error.message}\n\nCheck console for more details. Is the backend running and accessible at ${backendBaseUrl}?`;
+                } finally {
+                    loader.classList.add("hidden");
+                }
+            }
+        </script>
+    </body>
+</html>

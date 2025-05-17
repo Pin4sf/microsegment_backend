@@ -1,0 +1,18 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+httpx
+python-jose[cryptography] # For potential future JWT or secure session management
+passlib[bcrypt] # For hashing passwords if local user accounts are ever needed
+itsdangerous # Added for session cookie signing by SessionMiddleware
+# shopify-api-python # If we decide to use the official library later
+
+# Database dependencies
+sqlalchemy
+alembic
+psycopg2-binary # Standard PostgreSQL adapter
+asyncpg # Alternative async PostgreSQL adapter
+greenlet # Often needed by SQLAlchemy/Alembic
+python-dotenv # For managing .env files (likely already implicitly used by pydantic-settings but good to be explicit)
+

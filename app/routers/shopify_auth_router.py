@@ -1,0 +1,222 @@
+import httpx  # Ensure httpx is imported if used for exceptions, though not directly in this snippet
+import secrets
+from fastapi import APIRouter, Request, HTTPException, Query, Depends, status
+from fastapi.responses import RedirectResponse, JSONResponse
+import logging
+import hmac
+import hashlib
+from typing import Dict, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select  # Required for select statement
+
+# from app.services.shopify_service import ShopifyClient # ShopifyClient no longer used in this router
+from app.core.config import settings
+from app.utils.shopify_utils import generate_shopify_auth_url, verify_hmac
+from app.db.session import get_db
+from app.models.shop_model import Shop
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+# Removed temporary in-memory storages as they are replaced by session and DB
+# INSTALL_STATES: Dict[str, str] = {}
+# ACTIVE_INSTALLS: Dict[str, str] = {}
+# temp_state_storage = {} # This was the one explicitly identified for removal
+
+
+@router.get("/connect", summary="Initiate Shopify OAuth Flow")
+async def connect_to_shopify(shop: str, request: Request):
+    """
+    Redirects the user to the Shopify authorization URL.
+    This is the first step in the OAuth process.
+    """
+    if not shop:
+        raise HTTPException(status_code=400, detail="Shop domain is required.")
+
+    state = secrets.token_hex(16)
+    # INSTALL_STATES[state] = shop  # Store state with shop for verification later
+    # For now, we will store the state in the session cookie itself as a temporary measure.
+    # In a real app, you might use a server-side session store or a short-lived DB entry.
+    request.session['shopify_oauth_state'] = state
+    request.session['shopify_oauth_shop'] = shop
+
+    redirect_url = generate_shopify_auth_url(
+        shop_domain=shop,
+        api_key=settings.SHOPIFY_API_KEY,
+        scopes=settings.SHOPIFY_APP_SCOPES,
+        redirect_uri=settings.SHOPIFY_REDIRECT_URI,
+        state=state
+    )
+    return RedirectResponse(redirect_url)
+
+
+@router.get("/callback", summary="Handle Shopify OAuth Callback")
+async def shopify_callback(
+    request: Request,
+    shop: str,
+    code: str,
+    state: str,
+    hmac_shopify: Optional[str] = Query(
+        None, alias="hmac"),  # HMAC is provided by Shopify
+    timestamp: Optional[str] = Query(None),  # Timestamp is also provided
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handles the callback from Shopify after the user authorizes the app.
+    Verifies HMAC, exchanges the authorization code for an access token,
+    and stores the token.
+    """
+    # 1. Verify HMAC (already have a utility for this, but it needs the raw query string)
+    # We need to reconstruct the query string from the request for exact HMAC verification
+    # as query parameters might be reordered by FastAPI/Starlette.
+    # The raw query string is available via request.scope['query_string'].decode()
+    raw_query_string = request.scope['query_string'].decode()
+
+    # Remove hmac from query string for validation
+    # query_params_list = [f"{k}={v}" for k, v in request.query_params.items() if k != 'hmac']
+    # verifiable_query_string = "&".join(sorted(query_params_list)) # Ensure consistent order
+
+    # More robust way to get verifiable query string without hmac
+    query_params = dict(request.query_params)
+    # remove hmac and get its value
+    hmac_to_verify = query_params.pop('hmac', None)
+    # The Shopify documentation states the parameters should be sorted alphabetically by key
+    verifiable_query_string = "&".join(
+        [f"{k}={v}" for k, v in sorted(query_params.items())])
+
+    if not verify_hmac(verifiable_query_string, hmac_to_verify, settings.SHOPIFY_API_SECRET):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="HMAC validation failed.")
+
+    # 2. Verify State
+    # stored_state = INSTALL_STATES.pop(state, None)
+    # stored_shop_for_state = request.session.get('shopify_oauth_shop')
+    # if not stored_state or stored_state != shop:
+    #     raise HTTPException(status_code=403, detail="State validation failed. Possible CSRF attack.")
+    # More robust state verification directly using session
+    session_state = request.session.pop('shopify_oauth_state', None)
+    session_shop = request.session.pop('shopify_oauth_shop', None)
+
+    if not session_state or session_state != state or session_shop != shop:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="OAuth state validation failed. Possible CSRF attack or session issue."
+        )
+
+    # 3. Exchange authorization code for an access token
+    token_url = f"https://{shop}/admin/oauth/access_token"
+    payload = {
+        "client_id": settings.SHOPIFY_API_KEY,
+        "client_secret": settings.SHOPIFY_API_SECRET,
+        "code": code,
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(token_url, json=payload)
+            response.raise_for_status()  # Raises an exception for 4XX/5XX responses
+            token_data = response.json()
+        except httpx.HTTPStatusError as e:
+            # Log the error details from Shopify
+            # logger.error(f"Shopify token exchange failed for {shop}: {e.response.status_code} - {e.response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to exchange authorization code for access token. Shopify responded with: {e.response.text}",
+            )
+        except httpx.RequestError as e:
+            # logger.error(f"Request error during Shopify token exchange for {shop}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Could not connect to Shopify to exchange token: {str(e)}",
+            )
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        logger.error(
+            f"Access token not found in Shopify response for {shop}: {token_data}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Access token not found in Shopify response."
+        )
+
+    # --- TEMPORARY LOGGING FOR DEVELOPMENT/TESTING ---
+    logger.warning(
+        f"Successfully obtained RAW access token for shop {shop} (FOR TESTING PURPOSES): {access_token}")
+    # --- END TEMPORARY LOGGING ---
+
+    # 4. Store the access token securely (e.g., in a database)
+    # ACTIVE_INSTALLS[shop] = access_token # Replaced by DB storage
+
+    # --- Database Interaction ---
+    try:
+        # Check if the shop already exists
+        stmt = select(Shop).where(Shop.shop_domain == shop)
+        result = await db.execute(stmt)
+        db_shop = result.scalar_one_or_none()
+
+        if db_shop:
+            # Shop exists, update the access token
+            db_shop.access_token = access_token
+            # db_shop.is_installed = True # Assuming re-install means it's active
+            # updated_at will be handled by the model if onupdate=func.now() is set
+        else:
+            # Shop does not exist, create a new entry
+            db_shop = Shop(
+                shop_domain=shop,
+                access_token=access_token,
+                # is_installed=True,
+                # shopify_scopes=settings.SHOPIFY_APP_SCOPES # Good to store the scopes granted
+            )
+            db.add(db_shop)
+
+        await db.commit()
+        await db.refresh(db_shop)
+        logger.info(
+            f"Successfully processed and stored token for shop: {shop}")
+
+    except Exception as e:
+        await db.rollback()
+        logger.exception(
+            f"Database error during token storage for {shop}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save access token to the database: {str(e)}"
+        )
+    # --- End Database Interaction ---
+
+    # TODO: After successful installation & token storage:
+    # 1. Register mandatory webhooks (GDPR).
+    # 2. Perform any other post-installation setup (e.g., initial data sync).
+
+    # For now, redirect to a success page or the app's embedded interface
+    # This redirect URL will likely be to your app's frontend, possibly within Shopify admin
+    # The shop domain and host (if needed for App Bridge) could be passed as query params
+    # A common pattern is to redirect to the app's main page within the Shopify admin.
+    # The exact URL structure depends on how your frontend is set up and if it's an embedded app.
+    # For example: f"{settings.SHOPIFY_APP_URL}?shop={shop}&host={request.query_params.get('host')}"
+    # If SHOPIFY_APP_URL is the base URL of your frontend app.
+
+    app_home_url = f"{settings.SHOPIFY_APP_URL}?shop={shop}"
+    # For embedded apps, Shopify provides a 'host' param
+    if request.query_params.get('host'):
+        app_home_url += f"&host={request.query_params.get('host')}"
+
+    return RedirectResponse(app_home_url)
+
+
+# Example of how you might retrieve a token later (e.g., for an API call)
+# async def get_shop_token(shop_domain: str, db: AsyncSession = Depends(get_db)):
+#     stmt = select(Shop).where(Shop.shop_domain == shop_domain)
+#     result = await db.execute(stmt)
+#     shop = result.scalar_one_or_none()
+#     if shop and shop.is_installed: # Check if app is currently installed/active
+#         # Here you would decrypt the token if it was encrypted
+#         return shop.access_token
+#     return None
+
+# TODO:
+# - Consider encrypting access tokens in the database.
+# - Add more robust error handling and logging.
+# - Implement webhook registration for mandatory webhooks.
+# - Ensure `SHOPIFY_APP_URL` in `.env` points to your app's main page/dashboard.
