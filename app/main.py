@@ -53,10 +53,10 @@ app.add_middleware(
 
 # Include routers with prefixes
 app.include_router(
-    shopify_auth_router.router, prefix="/api/auth/shopify", tags=["Shopify Auth"]
+    shopify_auth_router.router, prefix="/api/v1/auth/shopify", tags=["Shopify Auth"] # Changed to v1
 )
 app.include_router(
-    shopify_data_router.router, prefix="/api/data/shopify", tags=["Shopify Data"]
+    shopify_data_router.router, prefix="/api/v1/data/shopify", tags=["Shopify Data"] # Changed to v1
 )
 
 # Include the new webhook router
