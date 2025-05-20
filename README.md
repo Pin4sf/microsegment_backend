@@ -99,42 +99,54 @@ Refer to `todo.md` and `notes.md` for a detailed breakdown of completed tasks, p
 ## Project Structure
 
 ```
-.env.example        # Example environment variables
-.gitignore          # Specifies intentionally untracked files that Git should ignore
-alembic/            # Alembic migration scripts and configuration
-alembic.ini         # Alembic configuration file
-app/
-├── __init__.py
-├── core/             # Core application settings, logging
+.
+├── .env.example        # Example environment variables
+├── .gitignore         # Specifies intentionally untracked files that Git should ignore
+├── .shopify/          # Shopify CLI configuration
+├── alembic/           # Alembic migration scripts and configuration
+├── alembic.ini        # Alembic configuration file
+├── app/               # FastAPI application
 │   ├── __init__.py
-│   ├── config.py
-│   └── logging_config.py
-├── db/               # Database session management, base model
-│   ├── __init__.py
-│   ├── base.py
-│   └── session.py
-├── models/           # SQLAlchemy ORM models
-│   ├── __init__.py
-│   └── shop_model.py
-├── routers/          # API endpoint definitions (FastAPI routers)
-│   ├── __init__.py
-│   ├── shopify_auth_router.py
-│   ├── shopify_data_router.py
-│   └── shopify_webhooks_router.py
-├── schemas/          # Pydantic schemas for data validation and serialization
-│   ├── __init__.py
-│   └── shopify_schemas.py
-├── services/         # Business logic, external service clients
-│   ├── __init__.py
-│   └── shopify_service.py
-├── utils/            # Utility functions
-│   ├── __init__.py
-│   ├── shopify_utils.py
-│   └── webhook_utils.py
-└── main.py           # FastAPI application entry point
-notes.md            # Project notes, architecture decisions, etc.
-requirements.txt    # Python package dependencies
-todo.md             # Task tracking for project development
+│   ├── core/          # Core application settings, logging
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   └── logging_config.py
+│   ├── db/            # Database session management, base model
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   └── session.py
+│   ├── models/        # SQLAlchemy ORM models
+│   │   ├── __init__.py
+│   │   └── shop_model.py
+│   ├── routers/       # API endpoint definitions (FastAPI routers)
+│   │   ├── __init__.py
+│   │   ├── shopify_auth_router.py
+│   │   ├── shopify_data_router.py
+│   │   └── shopify_webhooks_router.py
+│   ├── schemas/       # Pydantic schemas for data validation
+│   │   ├── __init__.py
+│   │   └── shopify_schemas.py
+│   ├── services/      # Business logic, external service clients
+│   │   ├── __init__.py
+│   │   └── shopify_service.py
+│   ├── utils/         # Utility functions
+│   │   ├── __init__.py
+│   │   ├── shopify_utils.py
+│   │   └── webhook_utils.py
+│   └── main.py        # FastAPI application entry point
+├── extensions/        # Shopify Web Pixel extension
+│   └── microsegments-activity-tracker/
+│       ├── src/       # Extension source code
+│       ├── package.json
+│       └── shopify.extension.toml
+├── node_modules/      # Node.js dependencies
+├── notes.md          # Project notes, architecture decisions
+├── package.json      # Node.js package configuration
+├── package-lock.json # Node.js dependency lock file
+├── requirements.txt  # Python package dependencies
+├── shopify.app.toml  # Shopify app configuration
+├── test.py          # Test script
+└── todo.md          # Task tracking for project development
 ```
 
 ## Key Technologies
@@ -156,4 +168,72 @@ todo.md             # Task tracking for project development
 - **Resolve SSL Verification:** Remove `verify=False` from `ShopifyClient` and ensure proper SSL verification for production.
 - **Implement Robust Logging:** Uncomment and enhance logging statements throughout the application.
 
-Refer to `todo.md` and `notes.md` for more details. 
+Refer to `todo.md` and `notes.md` for more details.
+
+## Web Pixel Extension Features
+
+- **Events Tracked:**
+  - Page views
+  - Product views
+  - Search submissions
+  - Cart views
+  - Checkout completions
+  - Collection views
+  - Product additions to cart
+
+- **Extension Management:**
+  - Automatic activation during app installation
+  - Version tracking and updates
+  - Settings management
+
+## API Endpoints
+
+- **Authentication:**
+  - `POST /api/v1/auth/shopify/connect`
+  - `GET /api/v1/auth/shopify/callback`
+  - `POST /api/v1/auth/shopify/activate-extension`
+  - `POST /api/v1/auth/shopify/update-extension`
+
+- **Data:**
+  - `GET /api/v1/data/shopify/products`
+  - `GET /api/v1/data/shopify/orders`
+  - `GET /api/v1/data/shopify/customers`
+  - `GET /api/v1/data/shopify/transactions`
+  - `POST /api/v1/data/shopify/event`
+
+- **Webhooks:**
+  - `POST /api/v1/webhooks`
+
+## Development Priorities
+
+1. **High Priority:**
+   - Implement event data storage
+   - Add access token encryption
+   - Complete webhook handlers
+   - Set up event validation
+
+2. **Medium Priority:**
+   - Add rate limiting
+   - Implement caching
+   - Set up background tasks
+   - Enhance logging
+
+3. **Future Enhancements:**
+   - Analytics processing
+   - Customer segmentation
+   - Performance optimization
+   - Testing suite
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+[Your License Here]
+
+For more detailed information about the project's architecture and development status, refer to `notes.md` and `todo.md`. 

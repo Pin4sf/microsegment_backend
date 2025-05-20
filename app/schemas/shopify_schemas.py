@@ -10,21 +10,29 @@ class PageInfo(BaseModel):
 
 
 class ShopifyDataRequest(BaseModel):
-    shop: str = Field(...,
-                      description="The Shopify store domain (e.g., your-store.myshopify.com)")
-    access_token: str = Field(...,
-                              description="The Shopify access token for the store.")
+    shop: str = Field(
+        ..., description="The Shopify store domain (e.g., your-store.myshopify.com)"
+    )
+    access_token: str = Field(
+        ..., description="The Shopify access token for the store."
+    )
     custom_query: Optional[str] = Field(
-        None, description="Custom query string for filtering results (e.g., 'title:MyProduct')")
+        None,
+        description="Custom query string for filtering results (e.g., 'title:MyProduct')",
+    )
     cursor: Optional[str] = Field(
-        None, description="Cursor for pagination to fetch the next set of results.")
+        None, description="Cursor for pagination to fetch the next set of results."
+    )
     first: int = Field(
-        10, ge=1, le=250, description="Number of items to fetch per page.")
+        10, ge=1, le=250, description="Number of items to fetch per page."
+    )
 
 
 class ShopifyTransactionRequest(ShopifyDataRequest):
-    order_id: str = Field(...,
-                          description="The GraphQL ID of the order to fetch transactions for.")
+    order_id: str = Field(
+        ..., description="The GraphQL ID of the order to fetch transactions for."
+    )
+
 
 # --- Product Schemas (Simplified based on JS example) ---
 
@@ -87,6 +95,7 @@ class ShopifyProductResponse(BaseModel):
     # For flexibility if direct data pass-through is needed
     data: Optional[Dict[str, Any]] = None
 
+
 # --- Order Schemas (Simplified) ---
 
 
@@ -148,6 +157,7 @@ class ShopifyOrderResponse(BaseModel):
     message: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
 
+
 # --- Transaction Schemas (Simplified - assuming part of Order or fetched separately) ---
 # The JS example doesn't show a separate transaction fetcher, but implies it.
 # If transactions are fetched via Order, they might be part of OrderNode.
@@ -172,6 +182,7 @@ class ShopifyTransactionResponse(BaseModel):
     message: Optional[str] = None
     # For flexibility if direct data pass-through is needed for errors
     data: Optional[Dict[str, Any]] = None
+
 
 # --- Customer Schemas ---
 
@@ -210,9 +221,32 @@ class ShopifyCustomerResponse(BaseModel):
     message: Optional[str] = None
     data: Optional[Dict[str, Any]] = None  # For flexibility
 
+
+# Web pixel extension
+class ShopifyActivateExtensionRequest(BaseModel):
+    shop: str = Field(
+        ..., description="The Shopify store domain (e.g., your-store.myshopify.com)"
+    )
+    access_token: str = Field(
+        ..., description="The Shopify access token for the store."
+    )
+    extension_id: Optional[str] = Field(None, description="Extension id")
+
+
+class ShopifyActivateExtensionResponse(BaseModel):
+    success: bool
+    webPixel: Optional[Dict[str, Any]] = None
+
+
+# Handle Web pixel events
+class ShopifyEventRequest(BaseModel):
+    shop: dict = Field(..., description="The Shopify store Info")
+    event_name: str = Field(..., description="Event Type")
+    payload: dict = Field(..., description="Information Related to the emitted event")
+    account_id: str = Field(..., description="Account Id of the webpixel event")
+
+
 # Generic response for API calls
-
-
 class GenericResponse(BaseModel):
     success: bool
     message: Optional[str] = None

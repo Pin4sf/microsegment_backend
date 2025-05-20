@@ -230,4 +230,67 @@ For customers endpoint
 *   The raw access token from Shopify is currently logged with `logger.warning` in the OAuth callback for testing. This is temporary.
 *   Focus on tasks 1 & 2 above (Data Router Refactor & Token Encryption) as they are critical for security and proper functioning of other parts of the app.
 
+## New Features & Changes (Beyond Original Scope)
+
+### Web Pixel Extension for Customer Activity Tracking
+- **Location:** `extensions/microsegments-activity-tracker/src/index.js`
+- **Purpose:** Collects customer behavioral data directly from the storefront
+- **Events Tracked:**
+  - `page_viewed`: User visits any page
+  - `product_viewed`: User views a product page
+  - `search_submitted`: User submits a search query
+  - `cart_viewed`: User visits cart page
+  - `checkout_completed`: User completes checkout
+  - `collection_viewed`: User visits collection page
+  - `product_added_to_cart`: User adds product to cart
+- **Data Flow:** Extension gathers relevant payload and sends to backend endpoint
+- **Settings:** Uses `accountID` from extension settings (populated during activation/update)
+
+### Backend Endpoints for Web Pixel Events
+- **New Route:** `POST /api/data/shopify/event`
+- **Function:** Receives event data from Web Pixel extension
+- **Current Status:** Prints received data to console (TODO: Implement DB storage)
+- **Note:** This is separate from GDPR webhook handlers
+
+### Web Pixel Extension Management
+- **New Routes:**
+  - `POST /api/auth/shopify/activate-extension`: Creates/activates Web Pixel
+  - `POST /api/auth/shopify/update-extension`: Updates existing Web Pixel
+- **ShopifyClient Enhancements:**
+  - `activate_webpixel_extension()`: GraphQL `webPixelCreate` mutation
+  - `update_extension(extension_id)`: GraphQL `webPixelUpdate` mutation
+  - Both methods generate unique `accountID` using `generate_id()`
+- **Schema Additions:**
+  - `ShopifyActivateExtensionRequest`: Request body for activation/update
+  - `ShopifyActivateExtensionResponse`: Success response with webPixel data
+
+### Impact on Project Scope
+- **Expanded Functionality:**
+  - Backend now actively manages client-side extension
+  - New stream of real-time customer behavioral data
+  - Extension management via API calls
+- **Integration Points:**
+  - Client-side event tracking via Web Pixel
+  - Server-side event ingestion endpoint
+  - Extension lifecycle management
+
+### Updated Development Priorities
+1. **Web Pixel Integration (NEW HIGH PRIORITY):**
+   - Implement DB storage for event data
+   - Add validation for incoming event payloads
+   - Set up proper error handling for extension management
+   - Consider rate limiting for event ingestion
+
+2. **Existing High Priority Items (Still Critical):**
+   - Refactor `shopify_data_router.py` for DB token retrieval
+   - Implement access token encryption
+   - Complete GDPR webhook handlers
+   - Address production readiness items
+
+3. **New Considerations:**
+   - Event data schema design
+   - Storage strategy for high-volume event data
+   - Analytics processing pipeline
+   - Extension update/version management
+
 --- (Older notes sections can be reviewed for historical context if needed)

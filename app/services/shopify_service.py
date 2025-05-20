@@ -5,9 +5,10 @@ import time
 from urllib.parse import urlencode, parse_qs
 import ssl
 import certifi
-
+import json
 from app.core.config import settings
 import logging
+from app.utils.shopify_utils import generate_id
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class ShopifyClient:
         calculated_hmac = hmac.new(
             settings.SHOPIFY_API_SECRET.encode("utf-8"),
             message.encode("utf-8"),
-            hashlib.sha256
+            hashlib.sha256,
         ).hexdigest()
 
         return hmac.compare_digest(calculated_hmac, received_hmac)
@@ -56,14 +57,16 @@ class ShopifyClient:
 
         query_params = {
             "client_id": settings.SHOPIFY_API_KEY,
-            "scope": ",".join(settings.SHOPIFY_APP_SCOPES),
+            "scope": settings.SHOPIFY_APP_SCOPES,
             "redirect_uri": settings.SHOPIFY_REDIRECT_URI,
             "state": state,
             "grant_options[]": "per-user",
         }
         return f"https://{self.shop}/admin/oauth/authorize?{urlencode(query_params)}"
 
-    async def exchange_code_for_token(self, code: str, received_params: dict) -> str | None:
+    async def exchange_code_for_token(
+        self, code: str, received_params: dict
+    ) -> str | None:
         """
         Exchanges an authorization code for an access token.
         """
@@ -73,7 +76,8 @@ class ShopifyClient:
 
         if received_params.get("shop") != self.shop:
             logger.error(
-                f"Shop domain mismatch during token exchange. Expected {self.shop}, got {received_params.get('shop')}")
+                f"Shop domain mismatch during token exchange. Expected {self.shop}, got {received_params.get('shop')}"
+            )
             return None
 
         token_url = f"https://{self.shop}/admin/oauth/access_token"
@@ -97,22 +101,28 @@ class ShopifyClient:
                 return self.access_token
             except httpx.HTTPStatusError as e:
                 logger.error(
-                    f"HTTP error during token exchange for {self.shop}: {e.response.status_code} - {e.response.text}")
+                    f"HTTP error during token exchange for {self.shop}: {e.response.status_code} - {e.response.text}"
+                )
             except httpx.RequestError as e:
                 logger.error(
-                    f"Request error during token exchange for {self.shop}: {e}")
+                    f"Request error during token exchange for {self.shop}: {e}"
+                )
             except Exception as e:
                 logger.error(
-                    f"An unexpected error occurred during token exchange for {self.shop}: {e}")
+                    f"An unexpected error occurred during token exchange for {self.shop}: {e}"
+                )
         return None
 
-    async def make_graphql_request(self, query: str, variables: dict = None) -> dict | None:
+    async def make_graphql_request(
+        self, query: str, variables: dict = None
+    ) -> dict | None:
         """
         Makes an authenticated GraphQL request to the Shopify API.
         """
         if not self.access_token:
             logger.error(
-                f"Access token not available for shop {self.shop}. Cannot make GraphQL request.")
+                f"Access token not available for shop {self.shop}. Cannot make GraphQL request."
+            )
             # Consider raising an exception here
             return None
 
@@ -130,26 +140,36 @@ class ShopifyClient:
         async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             try:
                 logger.debug(
-                    f"Making GraphQL request to {self.graphql_url} for shop {self.shop} with payload: {payload}")
-                response = await client.post(self.graphql_url, headers=headers, json=payload)
+                    f"Making GraphQL request to {self.graphql_url} for shop {self.shop} with payload: {payload}"
+                )
+                response = await client.post(
+                    self.graphql_url, headers=headers, json=payload
+                )
                 response.raise_for_status()
                 response_data = response.json()
                 if response_data.get("errors"):
                     logger.error(
-                        f"GraphQL errors for shop {self.shop}: {response_data['errors']}")
+                        f"GraphQL errors for shop {self.shop}: {response_data['errors']}"
+                    )
                 return response_data  # Return full response, let caller extract 'data'
             except httpx.HTTPStatusError as e:
                 logger.error(
-                    f"HTTP error during GraphQL request for {self.shop}: {e.response.status_code} - {e.response.text}")
+                    f"HTTP error during GraphQL request for {self.shop}: {e.response.status_code} - {e.response.text}"
+                )
             except httpx.RequestError as e:
                 logger.error(
-                    f"Request error during GraphQL request for {self.shop}: {e}")
+                    f"Request error during GraphQL request for {self.shop}: {e}"
+                )
             except Exception as e:
                 logger.error(
-                    f"An unexpected error occurred during GraphQL request for {self.shop}: {e}", exc_info=True)
+                    f"An unexpected error occurred during GraphQL request for {self.shop}: {e}",
+                    exc_info=True,
+                )
         return None
 
-    async def get_products(self, first: int = 10, cursor: str = None, custom_query_filter: str = None):
+    async def get_products(
+        self, first: int = 10, cursor: str = None, custom_query_filter: str = None
+    ):
         """Fetches products from Shopify using GraphQL with pagination and custom query."""
         query_parts = []
         if cursor:
@@ -159,8 +179,9 @@ class ShopifyClient:
             # For simplicity, assuming it's a simple string here.
             query_parts.append(f'query: "{custom_query_filter}"')
 
-        product_params = f"first: {first}" + \
-            (", " + ", ".join(query_parts) if query_parts else "")
+        product_params = f"first: {first}" + (
+            ", " + ", ".join(query_parts) if query_parts else ""
+        )
 
         query = f"""
         query {{
@@ -202,10 +223,13 @@ class ShopifyClient:
         }}
         """
         logger.info(
-            f"Fetching products for shop {self.shop} with params: first={first}, cursor={cursor}, query_filter={custom_query_filter}")
+            f"Fetching products for shop {self.shop} with params: first={first}, cursor={cursor}, query_filter={custom_query_filter}"
+        )
         return await self.make_graphql_request(query)
 
-    async def get_orders(self, first: int = 10, cursor: str = None, custom_query_filter: str = None):
+    async def get_orders(
+        self, first: int = 10, cursor: str = None, custom_query_filter: str = None
+    ):
         """Fetches orders from Shopify using GraphQL with pagination and custom query."""
         query_parts = []
         if cursor:
@@ -213,8 +237,9 @@ class ShopifyClient:
         if custom_query_filter:
             query_parts.append(f'query: "{custom_query_filter}"')
 
-        order_params = f"first: {first}" + \
-            (", " + ", ".join(query_parts) if query_parts else "")
+        order_params = f"first: {first}" + (
+            ", " + ", ".join(query_parts) if query_parts else ""
+        )
 
         query = f"""
         query {{
@@ -254,10 +279,13 @@ class ShopifyClient:
         }}
         """
         logger.info(
-            f"Fetching orders for shop {self.shop} with params: first={first}, cursor={cursor}, query_filter={custom_query_filter}")
+            f"Fetching orders for shop {self.shop} with params: first={first}, cursor={cursor}, query_filter={custom_query_filter}"
+        )
         return await self.make_graphql_request(query)
 
-    async def get_transactions(self, order_id: str, first: int = 10, cursor: str = None):
+    async def get_transactions(
+        self, order_id: str, first: int = 10, cursor: str = None
+    ):
         """
         Fetches transactions for a specific order from Shopify using GraphQL.
         The transactions field on Order returns a list, not a standard connection.
@@ -289,11 +317,14 @@ class ShopifyClient:
         # Cursor is not used in this specific query for transactions as it's a direct list.
         # logger.info(f"Fetching transactions for order {order_id} in shop {self.shop} with params: first={first}, cursor={cursor (if used)}")
         logger.info(
-            f"Fetching transactions for order {order_id} in shop {self.shop} with params: first={first}")
+            f"Fetching transactions for order {order_id} in shop {self.shop} with params: first={first}"
+        )
         # The result will be nested under node.transactions if the order is found.
         return await self.make_graphql_request(query, variables)
 
-    async def get_customers(self, first: int = 10, cursor: str = None, custom_query_filter: str = None):
+    async def get_customers(
+        self, first: int = 10, cursor: str = None, custom_query_filter: str = None
+    ):
         """Fetches customers from Shopify using GraphQL with pagination and custom query."""
         query_parts = []
         if cursor:
@@ -302,8 +333,9 @@ class ShopifyClient:
             # Ensure custom_query_filter is properly escaped if it contains special characters
             query_parts.append(f'query: "{custom_query_filter}"')
 
-        customer_params = f"first: {first}" + \
-            (", " + ", ".join(query_parts) if query_parts else "")
+        customer_params = f"first: {first}" + (
+            ", " + ", ".join(query_parts) if query_parts else ""
+        )
 
         query = f"""
         query {{
@@ -333,5 +365,50 @@ class ShopifyClient:
         }}
         """
         logger.info(
-            f"Fetching customers for shop {self.shop} with params: first={first}, cursor={cursor}, query_filter={custom_query_filter}")
+            f"Fetching customers for shop {self.shop} with params: first={first}, cursor={cursor}, query_filter={custom_query_filter}"
+        )
         return await self.make_graphql_request(query)
+
+    async def activate_webpixel_extension(self):
+
+        query = """
+        mutation webPixelCreate($webPixel: WebPixelInput!) {
+            webPixelCreate(webPixel: $webPixel) {
+            userErrors {
+                field
+                message
+                code
+            }
+            webPixel {
+                id
+                settings
+            }
+            }
+        }
+        """
+        variables = {"webPixel": {
+            "settings": json.dumps({"accountID": generate_id()})}}
+        return await self.make_graphql_request(query, variables)
+
+    async def update_extension(self, extension_id):
+        query = """
+        mutation webPixelUpdate($id: ID!, $webPixel: WebPixelInput!) {
+        webPixelUpdate(id: $id, webPixel: $webPixel) {
+            userErrors {
+            field
+            message
+            code
+            }
+            webPixel {
+            id
+            settings
+            }
+        }
+        }
+        """
+
+        variables = {
+            "id": extension_id,
+            "webPixel": {"settings": json.dumps({"accountID": generate_id()})},
+        }
+        return await self.make_graphql_request(query, variables)

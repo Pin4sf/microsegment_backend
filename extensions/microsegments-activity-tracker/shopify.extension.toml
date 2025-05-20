@@ -1,0 +1,24 @@
+name = "microsegments_activity_tracker"
+type = "web_pixel_extension"
+
+runtime_context = "strict"
+
+[customer_privacy]
+analytics = false
+marketing = false
+preferences = false
+sale_of_data = "disabled"
+
+[settings]
+type = "object"
+
+[settings.fields.accountID]
+name = "Account ID"
+description = "Account ID"
+type = "single_line_text_field"
+validations =  [
+  { name = "min", value = "1" }
+]
+
+[capabilities]
+network_access = true

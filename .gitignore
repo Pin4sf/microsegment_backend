@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -25,17 +21,38 @@ wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-#  Usually these files are written by a script go in a specific directory, which is then ignored by
-#  the parent .gitignore file. However, for completeness, the following files are listed:
-# *.manifest
-# *.spec
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# Environment Variables
+.env
+.env.*
+.env.local
+.env.*.local
 
-# Unit test / coverage reports
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
 htmlcov/
 .tox/
 .nox/
@@ -50,166 +67,44 @@ coverage.xml
 .pytest_cache/
 pytestdebug.log
 
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-# *.log
-# local_settings.py
-# db.sqlite3
-# db.sqlite3-journal
-
-# Flask stuff:
-# instance/
-# .webassets-cache
-
-# Scrapy stuff:
-# .scrapy
-
-# Sphinx documentation
-docs/_build/
-doc/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-# .python-version
-
-# PEP 582; __pypackages__ directory
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath files
-# .sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# VS Code
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-*.code-workspace
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Thumbnails
-._*
-
-# Files that might appear in the root of a volume
-.Spotlight-V100
-.Trashes
-
-# IDE Misk
-# JetBrains
-.idea/
-
-# Ngrok executable (if you keep it in the project root)
-ngrok.exe
-ngrok
-
-# Project specific
-# project_structure.md
-# todo.md
-
-# If you generate ERD diagrams or other image assets locally
-# *.png
-# *.jpg
-# *.svg 
-
-# Virtual Environment
-venv/
-.venv/
-env/
-.env
-
-# Python cache files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# IDE specific
-.idea/
-.vscode/
-*.sublime-project
-*.sublime-workspace
-
-# OS specific
-.DS_Store
-Thumbs.db
-
-# Build artifacts
-dist/
-build/
-*.egg-info/
-
-# Log files
+# Logs
 *.log
 logs/
 
-# Local instance data / Sensitive files
-.env.*.local
-.env.local
-# alembic.ini might contain sensitive DB URL if not careful,
-# but usually it's managed via .env and env.py for SQLAlchemy URL.
-# If you ever hardcode secrets in alembic.ini, add it here.
-# For now, assume alembic.ini is safe to commit as it points to env vars or generic local dev.
+# OS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+._*
+.Spotlight-V100
+.Trashes
 
-# Coverage reports
-.coverage
-coverage.xml
-htmlcov/
-
-venv/
-__pycache__/
-*.pyc
-.env
+# Project specific
 ngrok.exe
+ngrok
+.shopify/
+*.pyc
 samples/
+
+# Database
+*.sqlite3
+*.db
+
+# Temporary files
+*.swp
+*.swo
+*~
+
+# Documentation
+docs/_build/
+doc/_build/
+/site
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+ngrok.exe

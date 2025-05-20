@@ -1,0 +1,26 @@
+client_id = "0a1fa33b39cce91a0d317db0dcd55b28"
+name = "Testbackend"
+handle = "testbackend-2"
+application_url = "https://alien-adapted-gecko.ngrok-free.app"
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2025-04"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_customers,read_orders,read_products,write_pixels,read_customer_events"
+
+[auth]
+redirect_urls = [
+  "https://alien-adapted-gecko.ngrok-free.app/api/auth/shopify/callback",
+  "https://alien-adapted-gecko.ngrok-free.app/auth/shopify/callback",
+  "https://alien-adapted-gecko.ngrok-free.app/api/auth/callback"
+]
+
+[pos]
+embedded = false
