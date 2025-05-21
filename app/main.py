@@ -7,14 +7,27 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from contextlib import asynccontextmanager
+
 # Import the setup_logging function
 from app.core.logging_config import setup_logging
 
 # Import settings to ensure .env is loaded early
 from app.core.config import settings
+from app.core.cache import redis_client
+from app.core.celery_app import celery_app
 
 # Call setup_logging to configure logging as soon as the app starts
 setup_logging()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    redis_client.ping()
+    celery_app.control.ping()
+    yield
+    # Shutdown
+    # Add any cleanup code here if needed
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -22,6 +35,7 @@ app = FastAPI(
     version="0.1.0",
     # Define openapi url if using API_V1_STR
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan
 )
 
 # Add SessionMiddleware - Make sure SESSION_SECRET_KEY is set in your .env file!
@@ -53,10 +67,10 @@ app.add_middleware(
 
 # Include routers with prefixes
 app.include_router(
-    shopify_auth_router.router, prefix="/api/v1/auth/shopify", tags=["Shopify Auth"] # Changed to v1
+    shopify_auth_router.router, prefix="/api/auth/shopify", tags=["Shopify Auth"]
 )
 app.include_router(
-    shopify_data_router.router, prefix="/api/v1/data/shopify", tags=["Shopify Data"] # Changed to v1
+    shopify_data_router.router, prefix="/api/data/shopify", tags=["Shopify Data"]
 )
 
 # Include the new webhook router

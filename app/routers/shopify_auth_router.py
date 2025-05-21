@@ -20,11 +20,7 @@ from app.models.shop_model import Shop
 from app.schemas.shopify_schemas import (
     ShopifyActivateExtensionRequest,
     ShopifyActivateExtensionResponse,
-    ExtensionStatusResponse,
 )
-from app.models.extension_model import Extension
-import json # Added for parsing settings string
-from app.services.webhook_service import register_all_required_webhooks # Added
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -202,23 +198,9 @@ async def shopify_callback(
         )
     # --- End Database Interaction ---
 
-    # --- Register Webhooks ---
-    if db_shop and db_shop.access_token: # Ensure we have a shop and token
-        logger.info(f"Attempting to register webhooks for shop: {db_shop.shop_domain}")
-        shop_client = ShopifyClient(shop=db_shop.shop_domain, access_token=db_shop.access_token)
-        # The webhook_base_url is settings.SHOPIFY_APP_URL
-        # The callback path is /webhooks (as defined in main.py for shopify_webhooks_router)
-        await register_all_required_webhooks(
-            shop_client=shop_client,
-            webhook_base_url=settings.SHOPIFY_APP_URL,
-            db_shop=db_shop,
-            db=db # Pass the existing db session
-        )
-        logger.info(f"Webhook registration process completed for shop: {db_shop.shop_domain}")
-    else:
-        logger.error(f"Skipping webhook registration for shop {shop} due to missing db_shop instance or access token.")
-    # --- End Register Webhooks ---
-
+    # TODO: After successful installation & token storage:
+    # 1. Register mandatory webhooks (GDPR).
+    # 2. Perform any other post-installation setup (e.g., initial data sync).
 
     # For now, redirect to a success page or the app's embedded interface
     # This redirect URL will likely be to your app's frontend, possibly within Shopify admin
@@ -254,306 +236,75 @@ async def shopify_callback(
 # - Ensure `SHOPIFY_APP_URL` in `.env` points to your app's main page/dashboard.
 
 
-@router.post(
-    "/activate-extension",
-    summary="Activates webpixel extension and tracks its status",
-    response_model=ShopifyActivateExtensionResponse,
-)
+@router.post("/activate-extension", summary="Activates webpixel extension")
 async def activate_webpixel_extension(
-    request_payload: ShopifyActivateExtensionRequest = Body(...),
-    db: AsyncSession = Depends(get_db),
+    request_data: ShopifyActivateExtensionRequest = Body(...),
 ):
-    # Ensure accountID is provided in settings for activation
-    if not request_payload.extension_settings or "accountID" not in request_payload.extension_settings:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="accountID is required in extension_settings to activate an extension.",
-        )
-    account_id_from_settings = request_payload.extension_settings["accountID"]
-
     try:
         client = ShopifyClient(
-            shop=request_payload.shop, access_token=request_payload.access_token
+            shop=request_data.shop, access_token=request_data.access_token
         )
-        # Pass settings to the client method, assuming it stringifies them as needed by GraphQL
-        # and that the Shopify service returns the Shopify GID and the accountID from settings.
-        # The client.activate_webpixel_extension now takes the settings dictionary
-        raw_response = await client.activate_webpixel_extension(settings=request_payload.extension_settings)
+        raw_response = await client.activate_webpixel_extension()
+        if raw_response and "data" in raw_response:
+            data_content = raw_response["data"]["webPixelCreate"]
+            if len(data_content["userErrors"]) > 0:
+                print(data_content["userErrors"][0]["message"])
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"An unexpected error occurred while activating webpixel extension.",
+                )
 
-        if not raw_response or "data" not in raw_response or not raw_response["data"].get("webPixelCreate"):
-            logger.error(f"Invalid response from Shopify activate_webpixel_extension for shop {request_payload.shop}: {raw_response}")
-            raise HTTPException(status_code=500, detail="Failed to activate extension: Invalid response from Shopify.")
-
-        web_pixel_create_data = raw_response["data"]["webPixelCreate"]
-        if web_pixel_create_data.get("userErrors"):
-            user_errors = web_pixel_create_data["userErrors"]
-            if user_errors: # Check if list is not empty
-                error_message = user_errors[0].get("message", "Unknown error during web pixel creation.")
-                logger.error(f"Shopify userErrors during webPixelCreate for {request_payload.shop}: {user_errors}")
-                raise HTTPException(status_code=400, detail=f"Shopify error: {error_message}")
-
-        shopify_web_pixel_info = web_pixel_create_data.get("webPixel")
-        if not shopify_web_pixel_info or "id" not in shopify_web_pixel_info or "settings" not in shopify_web_pixel_info:
-            logger.error(f"Missing webPixel id or settings in Shopify response for {request_payload.shop}: {shopify_web_pixel_info}")
-            raise HTTPException(status_code=500, detail="Failed to activate extension: Incomplete web pixel data from Shopify.")
-
-        shopify_gid = shopify_web_pixel_info["id"]
-        try:
-            shopify_settings_json = json.loads(shopify_web_pixel_info["settings"])
-            account_id = shopify_settings_json.get("accountID")
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse settings JSON from Shopify response for {request_payload.shop}: {shopify_web_pixel_info['settings']}")
-            raise HTTPException(status_code=500, detail="Failed to activate extension: Could not parse settings from Shopify.")
-
-        if not shopify_gid or not account_id:
-            logger.error(f"Extracted shopify_gid or account_id is missing. GID: {shopify_gid}, AccountID: {account_id} for shop {request_payload.shop}")
-            raise HTTPException(status_code=500, detail="Failed to activate extension: Missing Shopify GID or Account ID after processing response.")
-
-        # Ensure the accountID from settings matches the one from the response if it's critical
-        if account_id != account_id_from_settings:
-            logger.warning(f"AccountID mismatch for shop {request_payload.shop}: settings '{account_id_from_settings}', response '{account_id}'. Using response's.")
-            # Decide on handling: error out or use the one from response. For now, use response's.
-
-        # Query for existing Shop
-        shop_stmt = select(Shop).where(Shop.shop_domain == request_payload.shop)
-        shop_result = await db.execute(shop_stmt)
-        db_shop = shop_result.scalar_one_or_none()
-
-        if not db_shop:
-            raise HTTPException(status_code=404, detail=f"Shop {request_payload.shop} not found.")
-
-        # Query for existing Extension
-        ext_stmt = select(Extension).where(
-            Extension.shop_id == db_shop.id,
-            Extension.account_id == account_id # Use account_id from Shopify response
-        )
-        ext_result = await db.execute(ext_stmt)
-        db_extension = ext_result.scalar_one_or_none()
-
-        extension_version = "1.0.0" # Default or from request_payload.extension_settings
-
-        if db_extension:
-            db_extension.shopify_extension_id = shopify_gid
-            db_extension.status = "active"
-            db_extension.version = extension_version # Update version if needed
-            logger.info(f"Updated existing extension for account {account_id} on shop {db_shop.shop_domain}")
-        else:
-            db_extension = Extension(
-                shop_id=db_shop.id,
-                shopify_extension_id=shopify_gid,
-                account_id=account_id,
-                status="active",
-                version=extension_version,
+            return ShopifyActivateExtensionResponse(
+                success=True, webPixel=data_content["webPixel"]
             )
-            db.add(db_extension)
-            logger.info(f"Created new extension for account {account_id} on shop {db_shop.shop_domain}")
 
-        await db.commit()
-        await db.refresh(db_extension)
-
-        return ShopifyActivateExtensionResponse(
-            success=True,
-            webPixel={"id": db_extension.shopify_extension_id, "settings": {"accountID": db_extension.account_id}},
-            account_id=db_extension.account_id,
-            status=db_extension.status,
-            version=db_extension.version,
-            message="Extension activated successfully."
-        )
-
-    except HTTPException: # Re-raise HTTPExceptions directly
-        raise
     except Exception as e:
         logger.error(
-            f"Unexpected error in activate extension for shop {request_payload.shop}: {e}",
+            f"Unexpected error in activate extension method for shop {request_data.shop}: {e}",
             exc_info=True,
         )
-        await db.rollback() # Rollback on general error
         raise HTTPException(
             status_code=500,
-            detail=f"An unexpected server error occurred while activating extension: {str(e)}",
+            detail=f"An unexpected error occurred while activating extension.",
         )
 
 
-@router.post(
-    "/update-extension",
-    summary="Updates webpixel extension settings and tracks its status",
-    response_model=ShopifyActivateExtensionResponse, # Can reuse or make a specific one
-)
+@router.post("/update-extension", summary="Updates webpixel extension")
 async def update_webpixel_extension(
-    request_payload: ShopifyActivateExtensionRequest = Body(...), # Reuses request model
-    db: AsyncSession = Depends(get_db),
+    request_data: ShopifyActivateExtensionRequest = Body(...),
 ):
-    if not request_payload.extension_id:
-        raise HTTPException(status_code=400, detail="extension_id (Shopify GID) is required for updates.")
-    if not request_payload.extension_settings or "accountID" not in request_payload.extension_settings:
-        raise HTTPException(status_code=400, detail="accountID is required in extension_settings for updates.")
-
-    account_id_from_settings = request_payload.extension_settings["accountID"]
-    # Assuming a new version might be passed in settings, or we increment it
-    new_version = request_payload.extension_settings.get("version", "1.0.1") # Example version handling
-
     try:
         client = ShopifyClient(
-            shop=request_payload.shop, access_token=request_payload.access_token
+            shop=request_data.shop, access_token=request_data.access_token
         )
-        # The service method needs extension_id (Shopify GID) and the settings to update.
-        # The client.update_extension now takes extension_id and the settings dictionary
-        raw_response = await client.update_extension(
-            extension_id=request_payload.extension_id,
-            settings=request_payload.extension_settings
-        )
+        raw_response = await client.update_extension(request_data.extension_id)
+        if raw_response and "data" in raw_response:
+            data_content = raw_response["data"]["webPixelUpdate"]
+            if len(data_content["userErrors"]) > 0:
+                print(data_content["userErrors"][0]["message"])
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"An unexpected error occurred while updating webpixel extension.",
+                )
 
-        if not raw_response or "data" not in raw_response or not raw_response["data"].get("webPixelUpdate"):
-            logger.error(f"Invalid response from Shopify update_extension for shop {request_payload.shop}: {raw_response}")
-            raise HTTPException(status_code=500, detail="Failed to update extension: Invalid response from Shopify.")
-
-        web_pixel_update_data = raw_response["data"]["webPixelUpdate"]
-        if web_pixel_update_data.get("userErrors"):
-            user_errors = web_pixel_update_data["userErrors"]
-            if user_errors:
-                error_message = user_errors[0].get("message", "Unknown error during web pixel update.")
-                logger.error(f"Shopify userErrors during webPixelUpdate for {request_payload.shop}: {user_errors}")
-                raise HTTPException(status_code=400, detail=f"Shopify error: {error_message}")
-        
-        shopify_web_pixel_info = web_pixel_update_data.get("webPixel")
-        if not shopify_web_pixel_info or "id" not in shopify_web_pixel_info or "settings" not in shopify_web_pixel_info:
-            logger.error(f"Missing webPixel id or settings in Shopify update response for {request_payload.shop}: {shopify_web_pixel_info}")
-            raise HTTPException(status_code=500, detail="Failed to update extension: Incomplete web pixel data from Shopify.")
-
-        updated_shopify_gid = shopify_web_pixel_info["id"]
-        try:
-            shopify_settings_json = json.loads(shopify_web_pixel_info["settings"])
-            updated_account_id = shopify_settings_json.get("accountID") # This is accountID from Shopify's perspective
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse settings JSON from Shopify update response for {request_payload.shop}: {shopify_web_pixel_info['settings']}")
-            raise HTTPException(status_code=500, detail="Failed to update extension: Could not parse settings from Shopify.")
-        
-        if not updated_shopify_gid or not updated_account_id:
-            logger.error(f"Extracted updated_shopify_gid or updated_account_id is missing. GID: {updated_shopify_gid}, AccountID: {updated_account_id} for shop {request_payload.shop}")
-            raise HTTPException(status_code=500, detail="Failed to update extension: Missing Shopify GID or Account ID after processing response.")
-
-        if updated_account_id != account_id_from_settings:
-             logger.warning(f"AccountID mismatch during update for shop {request_payload.shop}: settings '{account_id_from_settings}', response '{updated_account_id}'. Using settings one for DB lookup.")
-        # For update, we trust the account_id from settings to find our DB record.
-
-        # Query for existing Shop to get shop_id
-        shop_stmt = select(Shop).where(Shop.shop_domain == request_payload.shop)
-        shop_result = await db.execute(shop_stmt)
-        db_shop = shop_result.scalar_one_or_none()
-        if not db_shop:
-            raise HTTPException(status_code=404, detail=f"Shop {request_payload.shop} not found.")
-
-        # Query the Extension table using account_id (from settings) and shop_id
-        ext_stmt = select(Extension).where(
-            Extension.account_id == account_id_from_settings,
-            Extension.shop_id == db_shop.id
-        )
-        ext_result = await db.execute(ext_stmt)
-        db_extension = ext_result.scalar_one_or_none()
-
-        if not db_extension:
-            # This case is problematic: trying to update an extension we don't know about.
-            # For now, raise an error. Could also consider creating it if business logic allows.
-            logger.error(f"Extension with account_id {account_id_from_settings} not found in DB for shop {request_payload.shop} during update.")
-            raise HTTPException(
-                status_code=404,
-                detail=f"Extension with account_id '{account_id_from_settings}' not found for shop {request_payload.shop}. Cannot update.",
+            return ShopifyActivateExtensionResponse(
+                success=True, webPixel=data_content["webPixel"]
             )
 
-        # Update found extension
-        db_extension.shopify_extension_id = updated_shopify_gid # Shopify GID might change if recreated
-        db_extension.status = "active" # Assume update implies active
-        db_extension.version = new_version # Update version
-        # Potentially update other fields if they are part of extension_settings
-
-        await db.commit()
-        await db.refresh(db_extension)
-        logger.info(f"Successfully updated extension for account {db_extension.account_id} on shop {db_shop.shop_domain}")
-
-        return ShopifyActivateExtensionResponse( # Reusing response model
-            success=True,
-            webPixel={"id": db_extension.shopify_extension_id, "settings": request_payload.extension_settings}, # Return settings passed
-            account_id=db_extension.account_id,
-            status=db_extension.status,
-            version=db_extension.version,
-            message="Extension updated successfully."
-        )
-
-    except HTTPException: # Re-raise HTTPExceptions directly
-        raise
     except Exception as e:
         logger.error(
-            f"Unexpected error in update extension for shop {request_payload.shop}: {e}",
+            f"Unexpected error in update extension method for shop {request_data.shop}: {e}",
             exc_info=True,
         )
-        await db.rollback() # Rollback on general error
         raise HTTPException(
             status_code=500,
-            detail=f"An unexpected server error occurred while updating extension: {str(e)}",
+            detail=f"An unexpected error occurred while updating extension.",
         )
 
-# New endpoint for extension status
-@router.get(
-    "/extension-status",
-    summary="Get current status of the webpixel extension for a shop",
-    response_model=ExtensionStatusResponse,
-)
-async def get_extension_status(
-    shop_domain: str = Query(..., description="The Shopify domain of the shop (e.g., your-store.myshopify.com)"),
-    db: AsyncSession = Depends(get_db),
-):
-    # Query for the Shop
-    shop_stmt = select(Shop).where(Shop.shop_domain == shop_domain)
-    shop_result = await db.execute(shop_stmt)
-    db_shop = shop_result.scalar_one_or_none()
 
-    if not db_shop:
-        # Return a specific response or raise 404 if shop itself not found
-        # For this endpoint, we return the model with a message.
-        return ExtensionStatusResponse(
-            shop_domain=shop_domain,
-            message=f"Shop {shop_domain} not found or not yet registered with the app."
-        )
-
-    # Query for an active Extension for this shop.
-    # Assuming one shop can have one active extension of this type.
-    # If multiple are possible, logic might need to be more specific (e.g., filter by a type or primary status)
-    ext_stmt = select(Extension).where(
-        Extension.shop_id == db_shop.id,
-        # Extension.status == "active" # Optionally, only fetch active ones
-    ).order_by(Extension.updated_at.desc()) # Get the most recently updated one if multiple
-    
-    ext_result = await db.execute(ext_stmt)
-    db_extension = ext_result.first() # .first() returns a Row or None
-
-    if not db_extension:
-        return ExtensionStatusResponse(
-            shop_domain=shop_domain,
-            message="No web pixel extension configuration found for this shop."
-        )
-    
-    # If db_extension is a Row object, access elements by index or key
-    extension_data = db_extension[0] if db_extension else None # Get the Extension object from the Row
-
-    if not extension_data: # Should not happen if db_extension was not None, but good practice
-        return ExtensionStatusResponse(
-            shop_domain=shop_domain,
-            message="Error retrieving extension data." # Should be more specific if possible
-        )
-
-    return ExtensionStatusResponse(
-        shop_domain=shop_domain,
-        account_id=extension_data.account_id,
-        shopify_extension_id=extension_data.shopify_extension_id,
-        status=extension_data.status,
-        version=extension_data.version,
-        message="Extension status retrieved successfully."
-    )
-
-
-@router.get("/app-home", summary="Temporary App Home Page", include_in_schema=False) # Hiding from OpenAPI for now
+@router.get("/app-home", summary="Temporary App Home Page")
 async def app_home(
-    shop: str, # This comes from query param e.g. /app-home?shop=...
+    shop: str,
     db: AsyncSession = Depends(get_db)
 ):
     """

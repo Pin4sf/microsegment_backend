@@ -230,61 +230,21 @@ class ShopifyActivateExtensionRequest(BaseModel):
     access_token: str = Field(
         ..., description="The Shopify access token for the store."
     )
-    extension_id: Optional[str] = Field(None, description="Shopify GID of the extension, used for updates.") # Clarified description
-    extension_settings: Optional[Dict[str, Any]] = Field(None, description="Settings for the extension, e.g., {'accountID': 'some_id'}") # Added based on subtask
+    extension_id: Optional[str] = Field(None, description="Extension id")
 
 
 class ShopifyActivateExtensionResponse(BaseModel):
     success: bool
     webPixel: Optional[Dict[str, Any]] = None
-    account_id: Optional[str] = None # Added field
-    status: Optional[str] = None # Added field
-    version: Optional[str] = None # Added field
-    message: Optional[str] = None # Added field
-
-
-class ExtensionStatusResponse(BaseModel):
-    shop_domain: str
-    account_id: Optional[str] = None
-    shopify_extension_id: Optional[str] = None
-    status: Optional[str] = None
-    version: Optional[str] = None
-    message: Optional[str] = None # To provide context like "No active extension found"
-
-    class Config:
-        orm_mode = True
 
 
 # Handle Web pixel events
 class ShopifyEventRequest(BaseModel):
-    shop: dict = Field(..., description="The Shopify store Info") # shop_id (integer) and shop_domain (string)
+    shop: dict = Field(..., description="The Shopify store Info")
     event_name: str = Field(..., description="Event Type")
     payload: dict = Field(..., description="Information Related to the emitted event")
     account_id: str = Field(..., description="Account Id of the webpixel event")
 
-
-from datetime import datetime
-
-class WebPixelEventPayload(BaseModel):
-    account_id: str = Field(..., description="The account ID from the web pixel.")
-    event_name: str = Field(..., description="The name of the event.")
-    payload: Dict[str, Any] = Field(..., description="The event payload data.")
-    timestamp: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Timestamp of the event. Auto-generated if not provided.")
-
-    class Config:
-        orm_mode = True
-        schema_extra = {
-            "example": {
-                "account_id": "acc_123456789",
-                "event_name": "product_viewed",
-                "payload": {
-                    "product_id": "prod_98765",
-                    "product_name": "Awesome T-Shirt",
-                    "price": 29.99
-                },
-                "timestamp": "2025-05-21T10:00:00Z"
-            }
-        }
 
 # Generic response for API calls
 class GenericResponse(BaseModel):

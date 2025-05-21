@@ -4,7 +4,7 @@ from typing import List
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Micro Segment Backend"
-    API_V1_STR: str = "/api/v1"
+    API_V1_STR: str = "/api/"
 
     # Shopify API Credentials and Configuration
     SHOPIFY_API_KEY: str
@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = (
         "postgresql+asyncpg://microsegment_user:1234@localhost:5432/microsegment_app_db"
     )
+
+    #Redis and Celery
+    REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

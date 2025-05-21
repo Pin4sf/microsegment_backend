@@ -2,7 +2,7 @@
 from sqlalchemy import Column, String, Boolean, Text, Integer, DateTime
 from sqlalchemy.dialects.postgresql import ARRAY  # For storing scopes as an array
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship # Added import
+from sqlalchemy.orm import relationship
 from app.db.base import Base
 
 
@@ -22,13 +22,7 @@ class Shop(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True),
                         onupdate=func.now(), server_default=func.now())
-    # You might want to add other fields like:
-    # created_at = Column(DateTime(timezone=True), server_default=func.now())
-    # updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    # uninstall_date = Column(DateTime(timezone=True), nullable=True)
-    # plan_name = Column(String, nullable=True)
 
     extensions = relationship("Extension", back_populates="shop", cascade="all, delete-orphan") # Added relationship
-
     def __repr__(self):
         return f"<Shop(id={self.id}, shop_domain='{self.shop_domain}', is_installed={self.is_installed})>"

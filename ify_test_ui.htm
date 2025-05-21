@@ -77,6 +77,30 @@
                 margin-bottom: 5px;
                 font-weight: bold;
             }
+            .status-badge {
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 15px;
+                font-size: 0.9em;
+                margin-left: 10px;
+            }
+            .status-connected {
+                background-color: #4caf50;
+                color: white;
+            }
+            .status-disconnected {
+                background-color: #f44336;
+                color: white;
+            }
+            .auto-fill-info {
+                font-size: 0.9em;
+                color: #666;
+                margin-top: 5px;
+            }
+            input[readonly] {
+                background-color: #f8f8f8;
+                cursor: not-allowed;
+            }
         </style>
     </head>
     <body>
@@ -84,7 +108,14 @@
             <h2>Shopify Backend Test Interface</h2>
 
             <div class="endpoint-section">
-                <h3>1. Connect to Shopify Store (OAuth Flow)</h3>
+                <h3>
+                    1. Connect to Shopify Store (OAuth Flow)
+                    <span
+                        id="connectionStatus"
+                        class="status-badge status-disconnected"
+                        >Disconnected</span
+                    >
+                </h3>
                 <label for="shopDomainConnect"
                     >Shop Domain (e.g., your-store.myshopify.com):</label
                 ><br />
@@ -100,8 +131,8 @@
                         token (check backend console) and store it in the
                         database. For now, you'll need to manually copy the shop
                         domain and the logged raw access token to Section 2 for
-                        API testing.
-                    </small>
+                        API testing.</small
+                    >
                 </p>
             </div>
 
@@ -109,11 +140,8 @@
                 <h3>2. API Credentials for Data Fetching</h3>
                 <p>
                     <small
-                        ><b>Note:</b> Currently, you need to manually enter the
-                        access token obtained from the OAuth flow (see backend
-                        logs). This requirement will be removed once the backend
-                        is updated to fetch tokens automatically from the
-                        database.</small
+                        ><b>Note:</b> These fields will be automatically
+                        populated after successful OAuth flow.</small
                     >
                 </p>
                 <label for="shopDomainAPI">Shop Domain:</label><br />
@@ -122,6 +150,7 @@
                     id="shopDomainAPI"
                     size="50"
                     placeholder="e.g., teststorshivansh.myshopify.com"
+                    readonly
                 /><br />
                 <label for="accessTokenAPI"
                     >Access Token (from backend logs after OAuth):</label
@@ -131,7 +160,12 @@
                     id="accessTokenAPI"
                     size="70"
                     placeholder="Enter raw access token obtained from callback logs"
+                    readonly
                 /><br />
+                <div class="auto-fill-info">
+                    These fields will be automatically populated after
+                    successful authentication
+                </div>
             </div>
 
             <div class="endpoint-section">
@@ -184,22 +218,59 @@
 
         <script>
             const backendBaseUrl = "https://alien-adapted-gecko.ngrok-free.app"; // IMPORTANT: Replace with your ngrok HTTPS URL
+            let currentShop = null;
+            let currentAccessToken = null;
 
             const shopDomainConnectInput =
                 document.getElementById("shopDomainConnect");
             const shopDomainAPIInput = document.getElementById("shopDomainAPI");
             const accessTokenAPIInput =
                 document.getElementById("accessTokenAPI");
-
             const customQueryInput = document.getElementById("customQuery");
             const cursorInput = document.getElementById("cursor");
             const firstInput = document.getElementById("first");
             const orderIdInput = document.getElementById(
                 "orderIdForTransactions"
             );
-
             const responseArea = document.getElementById("responseArea");
             const loader = document.getElementById("loader");
+
+            // Update the onload function to handle the app-home redirect
+            window.onload = function () {
+                const urlParams = new URLSearchParams(window.location.search);
+                const shop = urlParams.get("shop");
+                const accessToken = urlParams.get("access_token");
+
+                if (shop && accessToken) {
+                    // Auto-populate fields
+                    shopDomainConnectInput.value = shop;
+                    shopDomainAPIInput.value = shop;
+                    accessTokenAPIInput.value = accessToken;
+                    currentShop = shop;
+                    currentAccessToken = accessToken;
+                    updateConnectionStatus(true);
+
+                    // Clear URL parameters
+                    window.history.replaceState(
+                        {},
+                        document.title,
+                        window.location.pathname
+                    );
+                }
+            };
+
+            function updateConnectionStatus(connected) {
+                const statusElement =
+                    document.getElementById("connectionStatus");
+                if (connected) {
+                    statusElement.textContent = "Connected";
+                    statusElement.className = "status-badge status-connected";
+                } else {
+                    statusElement.textContent = "Disconnected";
+                    statusElement.className =
+                        "status-badge status-disconnected";
+                }
+            }
 
             function connectShopify() {
                 const shopDomain = shopDomainConnectInput.value.trim();
@@ -216,32 +287,84 @@
                     );
                     return;
                 }
-                const connectUrl = `${backendBaseUrl}/api/v1/auth/connect?shop=${encodeURIComponent(
+
+                // Open auth in new tab
+                const connectUrl = `${backendBaseUrl}/api/auth/shopify/connect?shop=${encodeURIComponent(
                     shopDomain
                 )}`;
                 console.log("Opening in new tab:", connectUrl);
                 window.open(connectUrl, "_blank");
             }
 
+            // Listen for messages from app-home page
+            window.addEventListener("message", function (event) {
+                // Verify the origin of the message
+                if (event.origin !== backendBaseUrl) return;
+
+                // Check if the message contains auth data
+                if (event.data && event.data.type === "auth_success") {
+                    const { shop, access_token } = event.data;
+
+                    // Update the UI with the credentials
+                    shopDomainConnectInput.value = shop;
+                    shopDomainAPIInput.value = shop;
+                    accessTokenAPIInput.value = access_token;
+                    currentShop = shop;
+                    currentAccessToken = access_token;
+                    updateConnectionStatus(true);
+
+                    console.log("Credentials received and updated in test UI");
+                }
+            });
+
+            // Update the app-home page to send credentials back to test UI
+            window.onload = function () {
+                // Check if we're on the app-home page
+                if (window.location.pathname.includes("/app-home")) {
+                    const urlParams = new URLSearchParams(
+                        window.location.search
+                    );
+                    const shop = urlParams.get("shop");
+
+                    // Get the access token from the page content
+                    const accessTokenElement = document.querySelector(".value");
+                    if (accessTokenElement && shop) {
+                        const access_token = accessTokenElement.textContent;
+
+                        // Send message to the test UI tab
+                        window.opener.postMessage(
+                            {
+                                type: "auth_success",
+                                shop: shop,
+                                access_token: access_token,
+                            },
+                            backendBaseUrl
+                        );
+
+                        console.log("Credentials sent to test UI");
+                    }
+                }
+            };
+
             async function fetchData(apiEndpoint) {
-                const shop = shopDomainAPIInput.value.trim();
-                const accessToken = accessTokenAPIInput.value.trim();
+                if (!currentShop || !currentAccessToken) {
+                    alert(
+                        "Please connect to Shopify first using the OAuth flow."
+                    );
+                    return;
+                }
+
                 const customQuery = customQueryInput.value.trim() || null;
                 const cursor = cursorInput.value.trim() || null;
                 const first = parseInt(firstInput.value.trim()) || 10;
 
                 if (
                     !backendBaseUrl ||
-                    backendBaseUrl === "YOUR_NGROK_HTTPS_URL"
+                    backendBaseUrl ===
+                        "https://alien-adapted-gecko.ngrok-free.app"
                 ) {
                     alert(
                         "Please configure the backendBaseUrl in the script tag."
-                    );
-                    return;
-                }
-                if (!shop || !accessToken) {
-                    alert(
-                        "Please enter Shop Domain and Access Token in Section 2."
                     );
                     return;
                 }
@@ -250,8 +373,8 @@
                 responseArea.textContent = "Loading...";
 
                 const requestBody = {
-                    shop: shop,
-                    access_token: accessToken,
+                    shop: currentShop,
+                    access_token: currentAccessToken,
                     first: first,
                     cursor: cursor,
                     custom_query: customQuery,
@@ -293,24 +416,24 @@
             }
 
             async function fetchTransactions() {
-                const shop = shopDomainAPIInput.value.trim();
-                const accessToken = accessTokenAPIInput.value.trim();
+                if (!currentShop || !currentAccessToken) {
+                    alert(
+                        "Please connect to Shopify first using the OAuth flow."
+                    );
+                    return;
+                }
+
                 const orderId = orderIdInput.value.trim();
-                const first = parseInt(firstInput.value.trim()) || 5; // Transactions might want fewer by default
+                const first = parseInt(firstInput.value.trim()) || 5;
                 const cursor = cursorInput.value.trim() || null;
 
                 if (
                     !backendBaseUrl ||
-                    backendBaseUrl === "YOUR_NGROK_HTTPS_URL"
+                    backendBaseUrl ===
+                        "https://alien-adapted-gecko.ngrok-free.app"
                 ) {
                     alert(
                         "Please configure the backendBaseUrl in the script tag."
-                    );
-                    return;
-                }
-                if (!shop || !accessToken) {
-                    alert(
-                        "Please enter Shop Domain and Access Token in Section 2."
                     );
                     return;
                 }
@@ -323,12 +446,11 @@
                 responseArea.textContent = "Loading...";
 
                 const requestBody = {
-                    shop: shop,
-                    access_token: accessToken,
+                    shop: currentShop,
+                    access_token: currentAccessToken,
                     order_id: orderId,
                     first: first,
                     cursor: cursor,
-                    // custom_query is not typically used for direct transaction fetching by order_id
                 };
 
                 console.log(

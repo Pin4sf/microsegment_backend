@@ -369,14 +369,8 @@ class ShopifyClient:
         )
         return await self.make_graphql_request(query)
 
-    async def activate_webpixel_extension(self, settings: dict = None):
-        """
-        Activates a web pixel extension on Shopify.
-        Args:
-            settings (dict): A dictionary of settings for the web pixel.
-                             Expected to include 'accountID'. If None or accountID is missing,
-                             a new accountID will be generated.
-        """
+    async def activate_webpixel_extension(self):
+
         query = """
         mutation webPixelCreate($webPixel: WebPixelInput!) {
             webPixelCreate(webPixel: $webPixel) {
@@ -387,36 +381,16 @@ class ShopifyClient:
             }
             webPixel {
                 id
-                settings # This is a JSONString from Shopify
+                settings
             }
             }
         }
         """
-        final_settings = settings if settings and "accountID" in settings else {"accountID": generate_id()}
-        if settings and "accountID" not in settings: # if settings provided but no accountID, add one
-            final_settings.update(settings) # merge original settings with generated accountID
-            logger.warning(f"accountID was missing in provided settings for activate_webpixel_extension. Generated one: {final_settings['accountID']}")
-        
-        variables = {"webPixel": {"settings": json.dumps(final_settings)}}
-        logger.info(f"Activating web pixel for shop {self.shop} with settings: {final_settings}")
+        variables = {"webPixel": {
+            "settings": json.dumps({"accountID": generate_id()})}}
         return await self.make_graphql_request(query, variables)
 
-    async def update_extension(self, extension_id: str, settings: dict):
-        """
-        Updates an existing web pixel extension on Shopify.
-        Args:
-            extension_id (str): The Shopify GID of the web pixel to update.
-            settings (dict): A dictionary of settings to update.
-                             Must include 'accountID'.
-        """
-        if not settings or "accountID" not in settings:
-            logger.error("accountID is required in settings for update_extension.")
-            # Or raise ValueError("accountID is required in settings for update_extension.")
-            # Depending on how errors should be propagated from client.
-            # For now, let it proceed and Shopify might error, or router logic will catch it.
-            # However, it's better to validate here.
-            raise ValueError("accountID is required in settings to update an extension.")
-
+    async def update_extension(self, extension_id):
         query = """
         mutation webPixelUpdate($id: ID!, $webPixel: WebPixelInput!) {
         webPixelUpdate(id: $id, webPixel: $webPixel) {
@@ -427,153 +401,14 @@ class ShopifyClient:
             }
             webPixel {
             id
-            settings # This is a JSONString from Shopify
+            settings
             }
         }
         }
         """
+
         variables = {
             "id": extension_id,
-            "webPixel": {"settings": json.dumps(settings)}, # Pass provided settings
+            "webPixel": {"settings": json.dumps({"accountID": generate_id()})},
         }
-        logger.info(f"Updating web pixel {extension_id} for shop {self.shop} with settings: {settings}")
         return await self.make_graphql_request(query, variables)
-
-    async def register_webhook(self, topic: str, webhook_callback_url: str) -> dict:
-        """
-        Registers a single webhook subscription with Shopify.
-        Args:
-            topic: The webhook topic (e.g., "CUSTOMERS_DATA_REQUEST").
-            webhook_callback_url: The full URL for Shopify to send the webhook POST request to.
-        Returns:
-            A dictionary containing the 'id' and 'topic' of the created webhook subscription if successful,
-            or an error dictionary.
-        """
-        query = """
-        mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
-          webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
-            userErrors {
-              field
-              message
-              code
-            }
-            webhookSubscription {
-              id
-              topic
-              format
-              endpoint {
-                __typename
-                ... on WebhookHttpEndpoint {
-                  callbackUrl
-                }
-              }
-            }
-          }
-        }
-        """
-        variables = {
-            "topic": topic,
-            "webhookSubscription": {
-                "callbackUrl": webhook_callback_url,
-                "format": "JSON"
-            }
-        }
-        logger.info(f"Registering webhook for topic '{topic}' with callback URL '{webhook_callback_url}' for shop {self.shop}.")
-        
-        response_data = await self.make_graphql_request(query, variables)
-
-        if not response_data:
-            logger.error(f"Failed to register webhook for topic {topic} (shop {self.shop}): No response from Shopify.")
-            return {"error": "No response from Shopify."}
-
-        if "errors" in response_data:
-            logger.error(f"Failed to register webhook for topic {topic} (shop {self.shop}): GraphQL errors: {response_data['errors']}")
-            return {"error": "GraphQL error", "details": response_data['errors']}
-
-        create_data = response_data.get("data", {}).get("webhookSubscriptionCreate")
-        if not create_data:
-            logger.error(f"Failed to register webhook for topic {topic} (shop {self.shop}): 'webhookSubscriptionCreate' not in response data. Response: {response_data}")
-            return {"error": "'webhookSubscriptionCreate' not in response data."}
-
-        if create_data.get("userErrors"):
-            user_errors = create_data["userErrors"]
-            if user_errors: # Check if list is not empty
-                logger.error(f"Failed to register webhook for topic {topic} (shop {self.shop}): UserErrors: {user_errors}")
-                return {"error": "UserErrors reported by Shopify", "details": user_errors}
-        
-        webhook_subscription = create_data.get("webhookSubscription")
-        if webhook_subscription and webhook_subscription.get("id"):
-            logger.info(f"Successfully registered webhook for topic {topic} (shop {self.shop}) with ID: {webhook_subscription['id']}")
-            return {"id": webhook_subscription["id"], "topic": webhook_subscription["topic"]}
-        else:
-            logger.error(f"Failed to register webhook for topic {topic} (shop {self.shop}): Webhook ID not found in response. Response: {create_data}")
-            return {"error": "Webhook ID not found in successful response."}
-
-    async def get_existing_webhooks(self, first: int = 20) -> list:
-        """
-        Fetches existing webhook subscriptions for the shop.
-        Args:
-            first: The number of webhooks to fetch.
-        Returns:
-            A list of dictionaries, each containing 'id', 'topic', and 'callbackUrl' for existing webhooks.
-            Returns an empty list if an error occurs or no webhooks are found.
-        """
-        query = """
-        query webhookSubscriptions($first: Int!) {
-          webhookSubscriptions(first: $first) {
-            edges {
-              node {
-                id
-                topic
-                endpoint {
-                  __typename
-                  ... on WebhookHttpEndpoint {
-                    callbackUrl
-                  }
-                  # For EventBridge or PubSub, other fragments would be needed:
-                  # ... on WebhookEventBridgeEndpoint { arn }
-                  # ... on WebhookPubSubEndpoint { pubSubProject pubSubTopic }
-                }
-              }
-            }
-            pageInfo {
-              hasNextPage
-            }
-          }
-        }
-        """
-        variables = {"first": first}
-        logger.info(f"Fetching existing webhooks (first {first}) for shop {self.shop}.")
-        
-        response_data = await self.make_graphql_request(query, variables)
-        existing_webhooks = []
-
-        if not response_data or "data" not in response_data or not response_data["data"].get("webhookSubscriptions"):
-            logger.error(f"Failed to fetch existing webhooks for shop {self.shop}: Invalid response structure or no data. Response: {response_data}")
-            return existing_webhooks # Return empty list on error or no data
-
-        if "errors" in response_data:
-            logger.error(f"GraphQL errors while fetching webhooks for shop {self.shop}: {response_data['errors']}")
-            return existing_webhooks # Return empty list on GraphQL error
-
-        subscriptions_data = response_data["data"]["webhookSubscriptions"]
-        edges = subscriptions_data.get("edges", [])
-
-        for edge in edges:
-            node = edge.get("node")
-            if node and node.get("id") and node.get("topic") and isinstance(node.get("endpoint"), dict):
-                endpoint = node["endpoint"]
-                # Ensure we are dealing with an HTTP endpoint
-                if endpoint.get("__typename") == "WebhookHttpEndpoint" and "callbackUrl" in endpoint:
-                    existing_webhooks.append({
-                        "id": node["id"],
-                        "topic": node["topic"],
-                        "callbackUrl": endpoint["callbackUrl"]
-                    })
-                else:
-                    logger.warning(f"Found non-HTTP webhook or endpoint data missing for shop {self.shop}: ID {node.get('id')}, Endpoint type {endpoint.get('__typename')}")
-            else:
-                logger.warning(f"Incomplete webhook node data received for shop {self.shop}: {node}")
-        
-        logger.info(f"Found {len(existing_webhooks)} existing HTTP webhooks for shop {self.shop}.")
-        return existing_webhooks

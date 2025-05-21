@@ -158,139 +158,296 @@ For customers endpoint
 
 # Project Notes & Status
 
-## Recent Developments (as of latest update)
+## Project Overview
+This is a FastAPI-based backend service for Shopify integration, handling OAuth authentication, data fetching, webhook processing, and web pixel extension management.
 
-- **Database Integration & OAuth Flow:**
-    - `Shop` model updated: `access_token` field consolidated (now `Text`), `encrypted_access_token` removed, `is_installed` defaults to `True`, `updated_at` has `server_default`.
-    - Alembic migration `modify_shop_access_token_field` generated and applied.
-    - OAuth callback in `shopify_auth_router.py` now stores the (currently raw) `access_token` in the DB.
-    - **Temporary logging of raw access token added to OAuth callback for easier testing (`logger.warning`).**
-- **Session Management:**
-    - `SessionMiddleware` configured in `app/main.py`.
-    - `SESSION_SECRET_KEY` and `APP_SECRET_KEY` added to `app.core.config.settings` (user must set in `.env`).
-    - `itsdangerous` package added to `requirements.txt` for secure session signing.
-    - Old `temp_state_storage` dictionary removed from `shopify_auth_router.py`.
-- **GitHub Preparation:**
-    - `.gitignore` file created/verified (user to ensure it's present and correct).
-    - `.env.example` file content provided (user to create manually if tool blocked).
-    - Comprehensive `README.md` created.
+## Core Components
 
-## Current Status & Important Notes
+### 1. Authentication & Authorization
+- **OAuth Flow Implementation**
+  - ✅ Store connection endpoint (`/api/auth/shopify/connect`)
+  - ✅ OAuth callback handler (`/api/auth/shopify/callback`)
+  - ✅ Basic session management with FastAPI's SessionMiddleware
+  - ⚠️ Need to migrate to Redis for better scalability and security
 
-- **Core Data APIs (Products, Orders, etc.):** Functional but still expect `access_token` in request body. **Needs URGENT refactor.**
-- **Webhook Receiver:** Basic HMAC verification and dispatch in place. Handlers are placeholders.
-- **Database:** PostgreSQL with `Shop` model is live. Migrations are up-to-date with current model structure.
-- **Shopify OAuth Flow:** Functional, using DB for token storage and sessions for state. Raw token is logged for testing.
-- **SSL Verification:** `verify=False` in `ShopifyClient` is a known local dev workaround. **MUST be fixed for production.**
-- **Logging:** Basic logging infrastructure is present. More specific logging statements (especially for errors and info) need to be uncommented/added throughout the codebase.
+### 2. Database Integration
+- **Models**
+  - ✅ Shop model with access token storage
+  - ✅ Extension model for web pixel tracking
+  - ✅ Event model for customer activity
+  - ✅ Proper foreign key relationships
 
-## Detailed Next Steps & Priorities for Development Team:
+- **Migrations**
+  - ✅ Initial schema setup
+  - ✅ Extensions and events tables
+  - ✅ Indexes for performance optimization
 
-1.  **Refactor `shopify_data_router.py` (HIGH PRIORITY):**
-    *   **Goal:** Modify all data fetching endpoints (and the `_handle_shopify_request` helper) to retrieve the `access_token` from the `shops` database table based on the `shop_domain` provided in the request.
-    *   **Action:**
-        1.  Inject `db: AsyncSession = Depends(get_db)` into `_handle_shopify_request` (or directly into endpoints if not using the helper for everything).
-        2.  Remove `access_token` from the `ShopifyDataRequest` Pydantic model in `app/schemas/shopify_schemas.py`.
-        3.  In `_handle_shopify_request`, query the `Shop` table for the given `shop_domain` to get the `access_token`.
-        4.  Handle cases where the shop is not found or has no token (raise `HTTPException`).
-        5.  Instantiate `ShopifyClient` using the fetched token.
-        6.  (Later) When token encryption is implemented, this logic will also decrypt the token.
+### 3. Data Fetching
+- **ShopifyClient Implementation**
+  - ✅ Product data fetcher
+  - ✅ Order data fetcher
+  - ✅ Transaction data fetcher
+  - ✅ Customer data fetcher
+  - ✅ Pagination support
+  - ⚠️ SSL verification disabled (needs fix)
 
-2.  **Implement Access Token Encryption (HIGH PRIORITY):**
-    *   **Goal:** Securely store access tokens in the database.
-    *   **Action:**
-        1.  Ensure `APP_SECRET_KEY` is set in `.env` (from `app/core/config.py`).
-        2.  Choose and implement an encryption/decryption utility (e.g., using the `cryptography` library with Fernet).
-        3.  In `app/routers/shopify_auth_router.py` (OAuth callback), **encrypt** the `access_token` *before* saving it to `db_shop.access_token`.
-        4.  In `app/routers/shopify_data_router.py` (once refactored), **decrypt** the `access_token` after fetching it from the database and *before* passing it to `ShopifyClient`.
-        5.  **Note:** Since the `access_token` column in `Shop` model is already `Text`, no schema change (and thus no Alembic migration for the column type itself) might be immediately needed if you encrypt existing raw tokens. However, if you have existing raw tokens, you'll need a strategy (e.g., a data migration script or re-installations) to encrypt them.
+### 4. Webhook System
+- **Infrastructure**
+  - ✅ Basic webhook endpoint
+  - ✅ HMAC verification
+  - ✅ Basic webhook task structure
+  - ⚠️ Missing GDPR handlers
+  - ⚠️ Missing app uninstallation handler
 
-3.  **Implement Robust Logging:**
-    *   Go through `shopify_auth_router.py`, `shopify_data_router.py`, `shopify_service.py`, and `shopify_webhooks_router.py`.
-    *   Uncomment existing `logger.info`, `logger.error`, `logger.debug` statements.
-    *   Use `logger.exception()` in `except` blocks where full tracebacks are useful.
-    *   Add more informative log messages where appropriate to trace execution flow and errors.
+### 5. Web Pixel Extension
+- **Features**
+  - ✅ Extension model
+  - ✅ Event tracking structure
+  - ✅ Basic extension activation
+  - ⚠️ Event processing pipeline pending
+  - ⚠️ Rate limiting needed
 
-4.  **Complete Webhook Handlers (`shopify_webhooks_router.py`):**
-    *   Implement the actual logic for `handle_customers_data_request`, `handle_customers_redact`, and `handle_shop_redact`.
-    *   This will involve database interaction (fetching/deleting data) and potentially using the `ShopifyClient` (which first needs the data router refactor to easily get tokens).
+### 6. Asynchronous Processing
+- **Celery Setup**
+  - ✅ Basic Celery configuration
+  - ✅ Redis as message broker
+  - ✅ Windows-specific settings
+  - ✅ Basic task structure
+  - ✅ Flower monitoring setup
+  - ⚠️ Task retry logic needed
+  - ⚠️ Task error handling needed
 
-5.  **Implement Webhook Registration:**
-    *   After successful OAuth, use the obtained access token to make an API call to Shopify to register the necessary webhooks (GDPR, app uninstalled, etc.). This could be a new function in `ShopifyClient` or `shopify_utils.py` and called at the end of the OAuth callback.
+### 7. Caching System
+- **Redis Implementation**
+  - ✅ Redis server setup
+  - ✅ Basic caching decorator
+  - ✅ Connection pooling
+  - ✅ Redis connection for session management (pending implementation)
+  - ⚠️ Cache invalidation needed
+  - ⚠️ Performance monitoring needed
 
-6.  **Address SSL Verification for Production:**
-    *   In `app/services/shopify_service.py`, remove `verify=False` from `httpx.AsyncClient` calls.
-    *   Ensure `certifi` is used (e.g., `ssl_context = ssl.create_default_context(cafile=certifi.where())` and pass `verify=ssl_context`). Add `certifi` to `requirements.txt` if not already a sub-dependency.
+## Technical Details
 
-## For Team Members Getting Started:
+### Environment Configuration
+```env
+# Required Environment Variables
+SHOPIFY_API_KEY=your_api_key
+SHOPIFY_API_SECRET=your_api_secret
+SHOPIFY_APP_URL=your_app_url
+SHOPIFY_REDIRECT_URI=your_redirect_uri
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost/dbname
+SESSION_SECRET_KEY=your_session_key
+APP_SECRET_KEY=your_app_key
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/1
+CELERY_RESULT_BACKEND=redis://localhost:6379/2
+```
 
-*   Follow the `README.md` for initial project setup.
-*   **Manually create your `.gitignore` and `.env.example` files if they were not created by the AI assistant, using the content previously provided.** Ensure your actual `.env` is configured and **not committed.**
-*   The `SHOPIFY_APP_URL` and `SHOPIFY_REDIRECT_URI` in your `.env` will need to point to your ngrok instance for local OAuth testing.
-*   The raw access token from Shopify is currently logged with `logger.warning` in the OAuth callback for testing. This is temporary.
-*   Focus on tasks 1 & 2 above (Data Router Refactor & Token Encryption) as they are critical for security and proper functioning of other parts of the app.
+### API Endpoints
 
-## New Features & Changes (Beyond Original Scope)
+#### Authentication
+- `POST /api/auth/shopify/connect`
+  - Initiates OAuth flow
+  - Generates state parameter
+  - Stores state in session cookie (to be migrated to Redis)
+  - Redirects to Shopify
 
-### Web Pixel Extension for Customer Activity Tracking
-- **Location:** `extensions/microsegments-activity-tracker/src/index.js`
-- **Purpose:** Collects customer behavioral data directly from the storefront
-- **Events Tracked:**
-  - `page_viewed`: User visits any page
-  - `product_viewed`: User views a product page
-  - `search_submitted`: User submits a search query
-  - `cart_viewed`: User visits cart page
-  - `checkout_completed`: User completes checkout
-  - `collection_viewed`: User visits collection page
-  - `product_added_to_cart`: User adds product to cart
-- **Data Flow:** Extension gathers relevant payload and sends to backend endpoint
-- **Settings:** Uses `accountID` from extension settings (populated during activation/update)
+- `GET /api/auth/shopify/callback`
+  - Handles OAuth callback
+  - Verifies state from session cookie (to be migrated to Redis)
+  - Exchanges code for token
+  - Stores access token in database
+  - Creates/updates shop record
 
-### Backend Endpoints for Web Pixel Events
-- **New Route:** `POST /api/data/shopify/event`
-- **Function:** Receives event data from Web Pixel extension
-- **Current Status:** Prints received data to console (TODO: Implement DB storage)
-- **Note:** This is separate from GDPR webhook handlers
+#### Data Fetching
+- `POST /api/data/shopify/products`
+  - Fetches product data
+  - Supports pagination
+  - Accepts custom queries
 
-### Web Pixel Extension Management
-- **New Routes:**
-  - `POST /api/auth/shopify/activate-extension`: Creates/activates Web Pixel
-  - `POST /api/auth/shopify/update-extension`: Updates existing Web Pixel
-- **ShopifyClient Enhancements:**
-  - `activate_webpixel_extension()`: GraphQL `webPixelCreate` mutation
-  - `update_extension(extension_id)`: GraphQL `webPixelUpdate` mutation
-  - Both methods generate unique `accountID` using `generate_id()`
-- **Schema Additions:**
-  - `ShopifyActivateExtensionRequest`: Request body for activation/update
-  - `ShopifyActivateExtensionResponse`: Success response with webPixel data
+- `POST /api/data/shopify/orders`
+  - Fetches order data
+  - Supports filtering
+  - Includes pagination
 
-### Impact on Project Scope
-- **Expanded Functionality:**
-  - Backend now actively manages client-side extension
-  - New stream of real-time customer behavioral data
-  - Extension management via API calls
-- **Integration Points:**
-  - Client-side event tracking via Web Pixel
-  - Server-side event ingestion endpoint
-  - Extension lifecycle management
+- `POST /api/data/shopify/customers`
+  - Fetches customer data
+  - Supports pagination
 
-### Updated Development Priorities
-1. **Web Pixel Integration (NEW HIGH PRIORITY):**
-   - Implement DB storage for event data
-   - Add validation for incoming event payloads
-   - Set up proper error handling for extension management
-   - Consider rate limiting for event ingestion
+- `POST /api/data/shopify/transactions`
+  - Fetches transaction data
+  - Requires order ID
+  - Supports pagination
 
-2. **Existing High Priority Items (Still Critical):**
-   - Refactor `shopify_data_router.py` for DB token retrieval
-   - Implement access token encryption
-   - Complete GDPR webhook handlers
-   - Address production readiness items
+#### Webhooks
+- `POST /webhooks`
+  - Handles all Shopify webhooks
+  - Verifies HMAC signature
+  - Routes to appropriate handlers
+  - Processes in background using Celery
 
-3. **New Considerations:**
-   - Event data schema design
-   - Storage strategy for high-volume event data
-   - Analytics processing pipeline
-   - Extension update/version management
+#### Extension Management
+- `POST /api/auth/shopify/activate-extension`
+  - Creates web pixel extension
+  - Generates unique account ID
 
---- (Older notes sections can be reviewed for historical context if needed)
+- `POST /api/auth/shopify/update-extension`
+  - Updates existing extension
+  - Manages version control
+
+## Known Issues & Workarounds
+
+### 1. Session Management
+- **Current State**: Using FastAPI's SessionMiddleware with cookies
+- **Issue**: Not scalable for multiple server instances
+- **Workaround**: Using session cookies for development
+- **Fix Required**: Migrate to Redis-based session management
+
+### 2. SSL Verification
+- **Issue**: SSL verification disabled in `ShopifyClient`
+- **Workaround**: Using `verify=False` in development
+- **Fix Required**: Implement proper SSL certificate verification
+
+### 3. Access Token Storage
+- **Issue**: Raw tokens stored in database
+- **Workaround**: Temporary logging for testing
+- **Fix Required**: Implement encryption using `APP_SECRET_KEY`
+
+### 4. CORS Configuration
+- **Issue**: All origins allowed in development
+- **Workaround**: Using `allow_origins=["*"]`
+- **Fix Required**: Restrict to specific domains in production
+
+### 5. Windows-specific Celery Issues
+- **Issue**: Permission errors with default pool
+- **Workaround**: Using `--pool=solo` and `FORKED_BY_MULTIPROCESSING=1`
+- **Fix Required**: Consider using Docker for production
+
+## Development Guidelines
+
+### 1. Code Style
+- Use type hints consistently
+- Follow FastAPI best practices
+- Add comprehensive docstrings
+- Include error handling
+
+### 2. Testing
+- Test all webhook handlers
+- Verify extension functionality
+- Check security measures
+- Validate data integrity
+
+### 3. Security
+- Never log sensitive data
+- Use environment variables
+- Implement proper encryption
+- Follow OWASP guidelines
+
+### 4. Performance
+- Use async/await properly
+- Implement caching where needed
+- Monitor database queries
+- Optimize API calls
+
+## Production Readiness Checklist
+
+### Security
+- [ ] Enable SSL verification
+- [ ] Implement token encryption
+- [ ] Configure CORS properly
+- [ ] Set up rate limiting
+- [ ] Migrate session management to Redis
+
+### Monitoring
+- [ ] Configure production logging
+- [ ] Set up error tracking
+- [ ] Implement performance monitoring
+- [ ] Add health checks
+
+### Infrastructure
+- [ ] Set up backup procedures
+- [ ] Configure load balancing
+- [ ] Implement caching
+- [ ] Set up CI/CD
+
+### Documentation
+- [ ] Complete API documentation
+- [ ] Add deployment guide
+- [ ] Create troubleshooting guide
+- [ ] Document security measures
+
+## Next Steps
+
+### High Priority
+1. Migrate session management to Redis
+2. Implement webhook handlers for GDPR compliance
+3. Add app uninstallation handler
+4. Set up event processing pipeline
+5. Implement token encryption
+
+### Medium Priority
+1. Add rate limiting using Redis
+2. Configure CORS policies
+3. Implement caching for Shopify API responses
+4. Add task monitoring with Flower
+5. Implement webhook retry mechanism
+
+### Low Priority
+1. Add comprehensive logging
+2. Set up monitoring
+3. Create deployment documentation
+4. Add performance optimizations
+5. Implement API key authentication
+
+Todo as per (20th may 2025 23:00pm)
+
+# TODO
+
+## High Priority
+
+1. **Web Pixel Extension Integration**
+   - [ ] Create Extension model
+   - [ ] Add Extension-Shop relationship
+   - [ ] Create event processing pipeline
+   - [ ] Implement rate limiting
+   - [ ] Add extension status tracking
+
+2. **Security Enhancements**
+   - [ ] Implement token encryption
+   - [ ] Add rate limiting
+   - [ ] Configure CORS policies
+   - [ ] Fix SSL verification
+
+3. **Webhook Handlers**
+   - [ ] Implement CUSTOMERS_DATA_REQUEST handler
+   - [ ] Implement CUSTOMERS_REDACT handler
+   - [ ] Implement SHOP_REDACT handler
+   - [ ] Add webhook registration logic
+
+## Medium Priority
+
+1. **Asynchronous Processing**
+   - [ ] Set up Celery
+   - [ ] Configure message broker
+   - [ ] Move webhook processing to background
+   - [ ] Add task monitoring
+
+2. **Caching Implementation**
+   - [ ] Set up Redis
+   - [ ] Implement caching strategy
+   - [ ] Add cache invalidation
+   - [ ] Monitor cache performance
+
+## Low Priority
+
+1. **Documentation & Monitoring**
+   - [ ] Complete API documentation
+   - [ ] Add deployment guide
+   - [ ] Create troubleshooting guide
+   - [ ] Set up monitoring and alerting
+
+2. **Production Readiness**
+   - [ ] Configure production logging
+   - [ ] Set up backup procedures
+   - [ ] Pin dependency versions
+   - [ ] Configure SSL/TLS
