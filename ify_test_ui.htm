@@ -235,27 +235,27 @@
             const responseArea = document.getElementById("responseArea");
             const loader = document.getElementById("loader");
 
-            // Update the onload function to handle the app-home redirect
+            // This onload is for ify_test_ui.htm itself, primarily for initialization or if parameters are passed directly.
+            // The postMessage listener will handle data from the popup.
             window.onload = function () {
+                console.log("ify_test_ui.htm loaded.");
+                // Example: Check if any initial setup is needed or if params are directly in URL (fallback)
                 const urlParams = new URLSearchParams(window.location.search);
-                const shop = urlParams.get("shop");
-                const accessToken = urlParams.get("access_token");
+                const initialShop = urlParams.get("shop_init"); // Using different param names to avoid conflict
+                const initialToken = urlParams.get("token_init");
 
-                if (shop && accessToken) {
-                    // Auto-populate fields
-                    shopDomainConnectInput.value = shop;
-                    shopDomainAPIInput.value = shop;
-                    accessTokenAPIInput.value = accessToken;
-                    currentShop = shop;
-                    currentAccessToken = accessToken;
+                if (initialShop && initialToken) {
+                    console.log("Initial shop and token found in URL (fallback):", initialShop);
+                    shopDomainConnectInput.value = initialShop;
+                    shopDomainAPIInput.value = initialShop;
+                    accessTokenAPIInput.value = initialToken;
+                    currentShop = initialShop;
+                    currentAccessToken = initialToken;
                     updateConnectionStatus(true);
-
-                    // Clear URL parameters
-                    window.history.replaceState(
-                        {},
-                        document.title,
-                        window.location.pathname
-                    );
+                    // Optionally clear these specific params
+                    urlParams.delete("shop_init");
+                    urlParams.delete("token_init");
+                    window.history.replaceState({}, document.title, `${window.location.pathname}?${urlParams}`);
                 }
             };
 
@@ -296,55 +296,62 @@
                 window.open(connectUrl, "_blank");
             }
 
-            // Listen for messages from app-home page
+            // Listen for messages from app-home page (the popup)
             window.addEventListener("message", function (event) {
-                // Verify the origin of the message
-                if (event.origin !== backendBaseUrl) return;
+                console.log("Message received in ify_test_ui.htm:", event);
 
-                // Check if the message contains auth data
-                if (event.data && event.data.type === "auth_success") {
-                    const { shop, access_token } = event.data;
+                // IMPORTANT: For security, verify event.origin.
+                // It should match the origin of your FastAPI backend (where app_home is served).
+                // backendBaseUrl should be just the origin, e.g., "https://your-ngrok-domain.com"
+                // not "https://your-ngrok-domain.com/api/auth/shopify/app-home"
+                let expectedOrigin = "";
+                try {
+                    expectedOrigin = new URL(backendBaseUrl).origin;
+                } catch (e) {
+                    console.error("Invalid backendBaseUrl for origin check:", backendBaseUrl, e);
+                    // Fallback for local file testing if backendBaseUrl isn't a full URL
+                    // This part is tricky and depends on how you run ify_test_ui.htm
+                    // If ify_test_ui.htm is served by the same FastAPI app, this check is more reliable.
+                    // If it's a local file, event.origin might be "null" or "file://".
+                    // For development, you might temporarily relax this or log event.origin.
+                }
+
+                console.log("Expected origin for message:", expectedOrigin);
+                console.log("Actual message origin:", event.origin);
+
+                // Example: if (event.origin !== expectedOrigin && expectedOrigin !== "") {
+                //     console.warn("Message received from unexpected origin:", event.origin, ". Expected:", expectedOrigin);
+                //     return; // Stop processing if origin doesn't match
+                // }
+                // For now, we'll be a bit more permissive for local dev, but log.
+                if (expectedOrigin && event.origin !== expectedOrigin && event.origin !== "null" && !event.origin.startsWith("file:")) {
+                     console.warn("Message from unexpected origin. Expected:", expectedOrigin, "Got:", event.origin);
+                     // return; // Uncomment in production or stricter dev
+                }
+
+
+                // Check if the message contains the correct auth data structure
+                if (event.data && event.data.type === "shopify_auth_success") {
+                    const { shop, token } = event.data; // Ensure these keys match what app_home sends
+
+                    console.log("Received shopify_auth_success message with shop:", shop, "and token:", token);
 
                     // Update the UI with the credentials
-                    shopDomainConnectInput.value = shop;
+                    shopDomainConnectInput.value = shop; // Also update this for consistency
                     shopDomainAPIInput.value = shop;
-                    accessTokenAPIInput.value = access_token;
+                    accessTokenAPIInput.value = token; // Use 'token' as per new structure
                     currentShop = shop;
-                    currentAccessToken = access_token;
+                    currentAccessToken = token; // Use 'token'
                     updateConnectionStatus(true);
 
-                    console.log("Credentials received and updated in test UI");
+                    console.log("Credentials received via postMessage and updated in test UI.");
+                } else {
+                    console.log("Received message of different type or structure:", event.data);
                 }
             });
 
-            // Update the app-home page to send credentials back to test UI
-            window.onload = function () {
-                // Check if we're on the app-home page
-                if (window.location.pathname.includes("/app-home")) {
-                    const urlParams = new URLSearchParams(
-                        window.location.search
-                    );
-                    const shop = urlParams.get("shop");
-
-                    // Get the access token from the page content
-                    const accessTokenElement = document.querySelector(".value");
-                    if (accessTokenElement && shop) {
-                        const access_token = accessTokenElement.textContent;
-
-                        // Send message to the test UI tab
-                        window.opener.postMessage(
-                            {
-                                type: "auth_success",
-                                shop: shop,
-                                access_token: access_token,
-                            },
-                            backendBaseUrl
-                        );
-
-                        console.log("Credentials sent to test UI");
-                    }
-                }
-            };
+            // Removed the second window.onload that was meant for app-home.
+            // The window.onload at the top of this script is for ify_test_ui.htm.
 
             async function fetchData(apiEndpoint) {
                 if (!currentShop || !currentAccessToken) {

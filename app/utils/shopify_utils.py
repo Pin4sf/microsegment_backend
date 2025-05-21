@@ -77,3 +77,76 @@ def verify_hmac(
 def generate_id(length=8):
     characters = string.ascii_letters + string.digits  # a-zA-Z0-9
     return "".join(secrets.choice(characters) for _ in range(length))
+
+
+async def register_webhooks(
+    shop_domain: str, access_token: str, api_version: str, app_url: str
+):
+    """
+    Registers necessary webhooks with Shopify for the given shop.
+    """
+    import httpx  # Import httpx locally within the async function
+    import logging # Import logging
+
+    logger = logging.getLogger(__name__)
+
+    webhook_topics = [
+        "customers/data_request",
+        "customers/redact",
+        "shop/redact",
+        "app/uninstalled",
+    ]
+    webhook_base_url = f"https://{shop_domain}/admin/api/{api_version}/webhooks.json"
+    headers = {
+        "X-Shopify-Access-Token": access_token,
+        "Content-Type": "application/json",
+    }
+    # Ensure app_url ends with a slash if it doesn't, for proper joining with "webhooks"
+    # However, Shopify webhook address should be a full URL.
+    # Assuming app_url is the base (e.g., "https://myapp.com") and webhook endpoint is at "/webhooks"
+    # So, the callback_url should be "https://myapp.com/webhooks"
+    # If app_url might already include /webhooks or other paths, this needs care.
+    # For this implementation, we assume app_url is the *base* and "/webhooks" is the fixed path.
+    callback_url = f"{app_url.rstrip('/')}/webhooks"
+
+
+    async with httpx.AsyncClient(verify=False) as client: # verify=False for simplicity, use SSL context in prod
+        for topic in webhook_topics:
+            payload = {
+                "webhook": {"topic": topic, "address": callback_url, "format": "json"}
+            }
+            try:
+                response = await client.post(webhook_base_url, headers=headers, json=payload)
+                if response.status_code == 201:  # Created
+                    logger.info(
+                        f"Successfully registered webhook {topic} for shop {shop_domain} to {callback_url}."
+                    )
+                elif response.status_code == 422: # Unprocessable Entity
+                    # This often means the webhook already exists for this topic and address.
+                    # Shopify returns errors in a list, e.g., {"errors": {"address": ["has already been taken"]}}
+                    error_details = response.json()
+                    if "address" in error_details.get("errors", {}) and any("has already been taken" in e for e in error_details["errors"]["address"]):
+                        logger.info(
+                            f"Webhook {topic} for shop {shop_domain} to {callback_url} already exists. No action needed."
+                        )
+                    else:
+                        logger.warning(
+                            f"Failed to register webhook {topic} for shop {shop_domain}. Status: {response.status_code}, Response: {response.text}"
+                        )
+                else:
+                    response.raise_for_status() # Raise an exception for other 4xx/5xx errors
+                    logger.info(
+                        f"Successfully registered webhook {topic} for shop {shop_domain}."
+                    )
+            except httpx.HTTPStatusError as e:
+                logger.error(
+                    f"HTTP error registering webhook {topic} for shop {shop_domain}: {e.response.status_code} - {e.response.text}"
+                )
+            except httpx.RequestError as e:
+                logger.error(
+                    f"Request error registering webhook {topic} for shop {shop_domain}: {e}"
+                )
+            except Exception as e:
+                logger.exception(
+                    f"An unexpected error occurred while registering webhook {topic} for shop {shop_domain}: {e}"
+                )

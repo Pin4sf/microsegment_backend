@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
+    SESSION_DEFAULT_EXPIRE_TTL_SECONDS: int = 3600
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

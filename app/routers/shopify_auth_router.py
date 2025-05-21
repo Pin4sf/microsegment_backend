@@ -4,6 +4,7 @@ import certifi
 from fastapi import APIRouter, Request, HTTPException, Query, Depends, status, Body
 from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 import logging
+from app.main import redis_session
 import hmac
 import hashlib
 from typing import Dict, Optional
@@ -44,8 +45,9 @@ async def connect_to_shopify(shop: str, request: Request):
     # INSTALL_STATES[state] = shop  # Store state with shop for verification later
     # For now, we will store the state in the session cookie itself as a temporary measure.
     # In a real app, you might use a server-side session store or a short-lived DB entry.
-    request.session["shopify_oauth_state"] = state
-    request.session["shopify_oauth_shop"] = shop
+    # request.session["shopify_oauth_state"] = state
+    # request.session["shopify_oauth_shop"] = shop
+    await redis_session.set(session_id=state, data={"state": state, "shop": shop})
 
     redirect_url = generate_shopify_auth_url(
         shop_domain=shop,
@@ -106,10 +108,21 @@ async def shopify_callback(
     # if not stored_state or stored_state != shop:
     #     raise HTTPException(status_code=403, detail="State validation failed. Possible CSRF attack.")
     # More robust state verification directly using session
-    session_state = request.session.pop("shopify_oauth_state", None)
-    session_shop = request.session.pop("shopify_oauth_shop", None)
+    # session_state = request.session.pop("shopify_oauth_state", None)
+    # session_shop = request.session.pop("shopify_oauth_shop", None)
 
-    if not session_state or session_state != state or session_shop != shop:
+    session_data = await redis_session.get(session_id=state)
+    if not session_data:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="OAuth state not found in session or session expired. Please try again.",
+        )
+    session_state_from_redis = session_data.get("state")
+    session_shop_from_redis = session_data.get("shop")
+    # It's good practice to delete the session state after it's used once
+    await redis_session.delete(session_id=state)
+
+    if not session_state_from_redis or session_state_from_redis != state or session_shop_from_redis != shop:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="OAuth state validation failed. Possible CSRF attack or session issue.",
@@ -198,9 +211,25 @@ async def shopify_callback(
         )
     # --- End Database Interaction ---
 
-    # TODO: After successful installation & token storage:
-    # 1. Register mandatory webhooks (GDPR).
-    # 2. Perform any other post-installation setup (e.g., initial data sync).
+    # 5. Register Webhooks
+    logger.info(f"Attempting to register webhooks for shop: {shop}")
+    try:
+        from app.utils.shopify_utils import register_webhooks # Import locally to avoid circular dependency if any
+        # settings is already imported in this file
+        await register_webhooks(
+            shop_domain=shop,
+            access_token=access_token,
+            api_version=settings.SHOPIFY_API_VERSION,
+            app_url=settings.SHOPIFY_APP_URL
+        )
+        logger.info(f"Webhook registration process completed for shop: {shop}")
+    except Exception as e:
+        # Log the error, but don't let webhook registration failure block the OAuth flow.
+        # The app can still function, and webhooks can be registered later or manually.
+        logger.exception(f"Error during webhook registration for shop {shop}: {e}")
+
+
+    # TODO: Perform any other post-installation setup (e.g., initial data sync).
 
     # For now, redirect to a success page or the app's embedded interface
     # This redirect URL will likely be to your app's frontend, possibly within Shopify admin
@@ -339,11 +368,25 @@ async def app_home(
         }
 
         # Return HTML response for better readability
+        # Determine targetOrigin for postMessage
+        # If SHOPIFY_APP_URL is set and valid, use it. Otherwise, for local file testing, '*' might be needed.
+        # A more robust solution for local dev would be to serve ify_test_ui.htm from FastAPI itself.
+        target_origin = settings.SHOPIFY_APP_URL if settings.SHOPIFY_APP_URL and settings.SHOPIFY_APP_URL.startswith("http") else "'*'"
+        if target_origin == "'*'":
+            logger.warning("Using targetOrigin '*' for postMessage in app_home. This is insecure for production. Ensure SHOPIFY_APP_URL is correctly set.")
+        else:
+            # Ensure target_origin is a proper origin (scheme + hostname + port if non-default)
+            # For example, if SHOPIFY_APP_URL is "https://my-app.com/some/path", origin is "https://my-app.com"
+            from urllib.parse import urlparse
+            parsed_url = urlparse(settings.SHOPIFY_APP_URL)
+            target_origin = f"'{parsed_url.scheme}://{parsed_url.netloc}'"
+
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Shopify App Home</title>
+            <title>Shopify App Home - Auth Success</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
                 .container {{ max-width: 800px; margin: 0 auto; }}
@@ -351,7 +394,7 @@ async def app_home(
                 .content {{ background: #f9fafb; padding: 20px; border-radius: 5px; margin-top: 20px; }}
                 .detail {{ margin: 10px 0; }}
                 .label {{ font-weight: bold; color: #4a5568; }}
-                .value {{ color: #2d3748; }}
+                .value {{ color: #2d3748; word-break: break-all; }} /* Added word-break */
                 .warning {{ color: #e53e3e; font-style: italic; }}
             </style>
         </head>
@@ -361,13 +404,14 @@ async def app_home(
                     <h1>Shopify App Connection Details</h1>
                 </div>
                 <div class="content">
+                    <p>Authentication successful. You can close this window.</p>
                     <div class="detail">
                         <span class="label">Shop Domain:</span>
-                        <span class="value">{shop_data.shop_domain}</span>
+                        <span class="value" id="shopDomain">{shop_data.shop_domain}</span>
                     </div>
                     <div class="detail">
                         <span class="label">Access Token:</span>
-                        <span class="value">{shop_data.access_token}</span>
+                        <span class="value" id="accessToken">{shop_data.access_token}</span>
                     </div>
                     <div class="detail">
                         <span class="label">Installation Status:</span>
@@ -377,17 +421,37 @@ async def app_home(
                         <span class="label">Shopify Scopes:</span>
                         <span class="value">{', '.join(shop_data.shopify_scopes) if shop_data.shopify_scopes else 'None'}</span>
                     </div>
-                    <div class="detail">
-                        <span class="label">Created At:</span>
-                        <span class="value">{shop_data.created_at.strftime('%Y-%m-%d %H:%M:%S') if shop_data.created_at else 'N/A'}</span>
-                    </div>
-                    <div class="detail">
-                        <span class="label">Last Updated:</span>
-                        <span class="value">{shop_data.updated_at.strftime('%Y-%m-%d %H:%M:%S') if shop_data.updated_at else 'N/A'}</span>
-                    </div>
-                    <p class="warning">Note: This is a temporary page. In production, never expose access tokens in the UI.</p>
+                     <p class="warning">This page should close automatically. If not, please close it and check the Test UI.</p>
                 </div>
             </div>
+            <script>
+                window.onload = function() {{
+                    const shopDomain = document.getElementById('shopDomain').textContent;
+                    const accessToken = document.getElementById('accessToken').textContent;
+                    const targetOrigin = {target_origin}; // Dynamically set by backend
+
+                    if (window.opener) {{
+                        console.log('Sending message to opener:', {{ type: "shopify_auth_success", shop: shopDomain, token: accessToken }}, 'Target Origin:', targetOrigin);
+                        window.opener.postMessage({{
+                            type: "shopify_auth_success",
+                            shop: shopDomain,
+                            token: accessToken
+                        }}, targetOrigin);
+                        
+                        // Give a moment for the message to be sent before closing
+                        setTimeout(function() {{
+                            window.close();
+                        }}, 500);
+                    }} else {{
+                        console.warn('window.opener is not available. Cannot send message.');
+                        // Optionally, display a message to the user to manually copy details if window.opener is null
+                        const warningMessage = document.querySelector('.warning');
+                        if(warningMessage) {{
+                             warningMessage.textContent = 'Could not automatically send credentials to the Test UI. Please copy them manually. You can close this window.';
+                        }}
+                    }}
+                }};
+            </script>
         </body>
         </html>
         """

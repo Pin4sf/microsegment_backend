@@ -5,7 +5,6 @@ from app.routers import (
 )
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
 
 from contextlib import asynccontextmanager
 
@@ -16,6 +15,7 @@ from app.core.logging_config import setup_logging
 from app.core.config import settings
 from app.core.cache import redis_client
 from app.core.celery_app import celery_app
+from app.core.redis_session import RedisSession
 
 # Call setup_logging to configure logging as soon as the app starts
 setup_logging()
@@ -38,9 +38,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add SessionMiddleware - Make sure SESSION_SECRET_KEY is set in your .env file!
-# This middleware enables session support, which is used by shopify_auth_router for OAuth state.
-app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET_KEY)
+# Instantiate RedisSession
+redis_session = RedisSession(
+    redis_client_instance=redis_client, # Corrected: pass the imported redis_client instance
+    default_expire_ttl=settings.SESSION_DEFAULT_EXPIRE_TTL_SECONDS
+)
 
 # Set all CORS enabled origins
 if settings.SHOPIFY_APP_URL:  # TODO: Refine this for production
