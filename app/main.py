@@ -2,6 +2,7 @@ from app.routers import (
     shopify_auth_router,
     shopify_data_router,
     shopify_webhooks_router,
+    data_pull_router,
 )
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,7 @@ from app.core.celery_app import celery_app
 
 # Call setup_logging to configure logging as soon as the app starts
 setup_logging()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,20 +49,23 @@ if settings.SHOPIFY_APP_URL:  # TODO: Refine this for production
     origins = [
         str(settings.SHOPIFY_APP_URL),  # Your app's frontend URL
         "https://admin.shopify.com",  # For embedded apps
-        # Add other origins if necessary, e.g., localhost for local dev frontend
+        "https://alien-adapted-gecko.ngrok-free.app",  # Your ngrok URL
         "http://localhost:3000",
         "http://localhost:8000",
         "http://localhost:8080",  # Common local dev ports
+        "http://127.0.0.1:5500",  # VS Code Live Server
+        "http://localhost:5500",  # VS Code Live Server alternative
     ]
 else:
     origins = ["*"]  # Fallback, less secure
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]  # Expose all headers
 )
 
 # Import routers
@@ -77,6 +82,9 @@ app.include_router(
 app.include_router(
     shopify_webhooks_router.router, prefix="/webhooks", tags=["Shopify Webhooks"]
 )
+
+# Add routers
+app.include_router(data_pull_router.router)
 
 
 @app.get("/health", tags=["Health Check"])

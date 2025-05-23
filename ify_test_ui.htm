@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Shopify Backend Test UI</title>
+        <title>Shopify Data Collection Demo</title>
         <style>
             body {
                 font-family: sans-serif;
@@ -11,40 +11,91 @@
                 background-color: #f4f4f4;
             }
             .container {
+                max-width: 1200px;
+                margin: 0 auto;
                 background-color: #fff;
                 padding: 20px;
                 border-radius: 8px;
                 box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             }
-            input[type="text"],
-            button,
-            select {
-                padding: 10px;
-                margin-bottom: 10px;
-                border-radius: 4px;
+            .step {
+                margin-bottom: 30px;
+                padding: 20px;
                 border: 1px solid #ddd;
+                border-radius: 8px;
+                background-color: #fff;
+            }
+            .step.active {
+                border-color: #007bff;
+                box-shadow: 0 0 10px rgba(0, 123, 255, 0.2);
+            }
+            .step.completed {
+                border-color: #28a745;
+                background-color: #f8fff8;
+            }
+            .step-number {
+                display: inline-block;
+                width: 30px;
+                height: 30px;
+                line-height: 30px;
+                text-align: center;
+                background-color: #007bff;
+                color: white;
+                border-radius: 50%;
+                margin-right: 10px;
+            }
+            .step.completed .step-number {
+                background-color: #28a745;
+            }
+            input[type="text"] {
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+                border: 1px solid #ddd;
+                border-radius: 4px;
                 box-sizing: border-box;
             }
             button {
-                cursor: pointer;
+                padding: 12px 24px;
                 background-color: #007bff;
                 color: white;
-                border-color: #007bff;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                transition: background-color 0.3s;
             }
             button:hover {
                 background-color: #0056b3;
             }
-            pre {
-                background-color: #eee;
-                padding: 15px;
-                border-radius: 4px;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-                max-height: 400px;
-                overflow-y: auto;
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
             }
-            .hidden {
-                display: none;
+            .data-display {
+                margin-top: 20px;
+                padding: 20px;
+                background-color: #f8f9fa;
+                border-radius: 4px;
+            }
+            .data-section {
+                margin-bottom: 20px;
+            }
+            .data-section h4 {
+                margin: 0 0 10px 0;
+                color: #333;
+            }
+            .data-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                gap: 20px;
+                margin-top: 20px;
+            }
+            .data-card {
+                background: white;
+                padding: 15px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
             .loader {
                 border: 5px solid #f3f3f3;
@@ -53,7 +104,8 @@
                 width: 30px;
                 height: 30px;
                 animation: spin 1s linear infinite;
-                margin-bottom: 10px;
+                margin: 20px auto;
+                display: none;
             }
             @keyframes spin {
                 0% {
@@ -63,20 +115,6 @@
                     transform: rotate(360deg);
                 }
             }
-            h2,
-            h3 {
-                color: #333;
-            }
-            .endpoint-section {
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #eee;
-            }
-            label {
-                display: inline-block;
-                margin-bottom: 5px;
-                font-weight: bold;
-            }
             .status-badge {
                 display: inline-block;
                 padding: 5px 10px;
@@ -85,408 +123,613 @@
                 margin-left: 10px;
             }
             .status-connected {
-                background-color: #4caf50;
+                background-color: #28a745;
                 color: white;
             }
             .status-disconnected {
-                background-color: #f44336;
+                background-color: #dc3545;
                 color: white;
             }
-            .auto-fill-info {
-                font-size: 0.9em;
-                color: #666;
-                margin-top: 5px;
-            }
-            input[readonly] {
-                background-color: #f8f8f8;
-                cursor: not-allowed;
+            .hidden {
+                display: none;
             }
         </style>
     </head>
     <body>
         <div class="container">
-            <h2>Shopify Backend Test Interface</h2>
+            <h1>Shopify Data Collection Demo</h1>
 
-            <div class="endpoint-section">
-                <h3>
-                    1. Connect to Shopify Store (OAuth Flow)
-                    <span
-                        id="connectionStatus"
-                        class="status-badge status-disconnected"
-                        >Disconnected</span
-                    >
-                </h3>
-                <label for="shopDomainConnect"
-                    >Shop Domain (e.g., your-store.myshopify.com):</label
-                ><br />
-                <input type="text" id="shopDomainConnect" size="50" /><br />
-                <button onclick="connectShopify()">
-                    Connect Shopify Store
+            <!-- Step 1: Connect to Shopify -->
+            <div class="step" id="step1">
+                <h2>
+                    <span class="step-number">1</span>Connect to Your Shopify
+                    Store
+                </h2>
+                <p>
+                    Enter your Shopify store domain to begin the connection
+                    process.
+                </p>
+                <input
+                    type="text"
+                    id="shopDomain"
+                    placeholder="your-store.myshopify.com"
+                />
+                <button onclick="connectShopify()" id="connectButton">
+                    Connect to Shopify
                 </button>
-                <p>
-                    <small
-                        >This will redirect you to Shopify for authorization.
-                        After approval, Shopify redirects to the backend's
-                        `/callback`. The backend will then log the raw access
-                        token (check backend console) and store it in the
-                        database. For now, you'll need to manually copy the shop
-                        domain and the logged raw access token to Section 2 for
-                        API testing.</small
-                    >
-                </p>
-            </div>
+                <div
+                    id="connectionStatus"
+                    class="status-badge status-disconnected"
+                >
+                    Disconnected
+                </div>
 
-            <div class="endpoint-section">
-                <h3>2. API Credentials for Data Fetching</h3>
-                <p>
-                    <small
-                        ><b>Note:</b> These fields will be automatically
-                        populated after successful OAuth flow.</small
+                <!-- Manual Credential Input -->
+                <div
+                    class="manual-credentials"
+                    style="
+                        margin-top: 20px;
+                        padding: 15px;
+                        background: #f8f9fa;
+                        border-radius: 4px;
+                    "
+                >
+                    <h3>Manual Credential Entry</h3>
+                    <p>
+                        If you've already completed the Shopify installation,
+                        you can enter the credentials manually:
+                    </p>
+                    <div style="margin-bottom: 10px">
+                        <label for="manualShop">Shop Domain:</label>
+                        <input
+                            type="text"
+                            id="manualShop"
+                            placeholder="your-store.myshopify.com"
+                            style="width: 100%"
+                        />
+                    </div>
+                    <div style="margin-bottom: 10px">
+                        <label for="manualToken">Access Token:</label>
+                        <input
+                            type="text"
+                            id="manualToken"
+                            placeholder="shpat_..."
+                            style="width: 100%"
+                        />
+                    </div>
+                    <button
+                        onclick="useManualCredentials()"
+                        style="background-color: #28a745"
                     >
-                </p>
-                <label for="shopDomainAPI">Shop Domain:</label><br />
-                <input
-                    type="text"
-                    id="shopDomainAPI"
-                    size="50"
-                    placeholder="e.g., teststorshivansh.myshopify.com"
-                    readonly
-                /><br />
-                <label for="accessTokenAPI"
-                    >Access Token (from backend logs after OAuth):</label
-                ><br />
-                <input
-                    type="text"
-                    id="accessTokenAPI"
-                    size="70"
-                    placeholder="Enter raw access token obtained from callback logs"
-                    readonly
-                /><br />
-                <div class="auto-fill-info">
-                    These fields will be automatically populated after
-                    successful authentication
+                        Use These Credentials
+                    </button>
                 </div>
             </div>
 
-            <div class="endpoint-section">
-                <h3>3. Fetch Shopify Data</h3>
-                <label for="customQuery"
-                    >Custom Query (optional, e.g.,
-                    <code>title:MyProduct</code> or
-                    <code>financial_status:paid</code>):</label
-                ><br />
-                <input type="text" id="customQuery" size="70" /><br />
-                <label for="cursor">Cursor (optional, for pagination):</label
-                ><br />
-                <input type="text" id="cursor" size="70" /><br />
-                <label for="first">First N items (default 10):</label><br />
-                <input
-                    type="text"
-                    id="first"
-                    size="10"
-                    value="10"
-                /><br /><br />
-
-                <button onclick="fetchData('/api/data/shopify/products')">
-                    Get Products
+            <!-- Step 2: Collect Data -->
+            <div class="step" id="step2">
+                <h2>
+                    <span class="step-number">2</span>Collect Your Store Data
+                </h2>
+                <p>
+                    Once connected, click below to start collecting your store
+                    data.
+                </p>
+                <button onclick="collectData()" id="collectButton" disabled>
+                    Collect Store Data
                 </button>
-                <button onclick="fetchData('/api/data/shopify/orders')">
-                    Get Orders
-                </button>
-                <button onclick="fetchData('/api/data/shopify/customers')">
-                    Get Customers
-                </button>
-                <br /><br />
-                <label for="orderIdForTransactions"
-                    >Order ID (for Transactions, e.g.,
-                    <code>gid://shopify/Order/XYZ</code>):</label
-                ><br />
-                <input
-                    type="text"
-                    id="orderIdForTransactions"
-                    size="70"
-                /><br />
-                <button onclick="fetchTransactions()">
-                    Get Transactions for Order
-                </button>
+                <div class="loader" id="dataLoader"></div>
             </div>
 
-            <h3>4. API Response</h3>
-            <div id="loader" class="loader hidden"></div>
-            <pre id="responseArea">API responses will appear here...</pre>
+            <!-- Step 3: View Data -->
+            <div class="step" id="step3">
+                <h2><span class="step-number">3</span>View Collected Data</h2>
+                <div class="data-display" id="dataDisplay">
+                    <div class="data-section">
+                        <h4>Customers</h4>
+                        <div class="data-grid" id="customersGrid"></div>
+                    </div>
+                    <div class="data-section">
+                        <h4>Products</h4>
+                        <div class="data-grid" id="productsGrid"></div>
+                    </div>
+                    <div class="data-section">
+                        <h4>Orders</h4>
+                        <div class="data-grid" id="ordersGrid"></div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <script>
-            const backendBaseUrl = "https://alien-adapted-gecko.ngrok-free.app"; // IMPORTANT: Replace with your ngrok HTTPS URL
+            const backendBaseUrl = "https://alien-adapted-gecko.ngrok-free.app";
             let currentShop = null;
             let currentAccessToken = null;
 
-            const shopDomainConnectInput =
-                document.getElementById("shopDomainConnect");
-            const shopDomainAPIInput = document.getElementById("shopDomainAPI");
-            const accessTokenAPIInput =
-                document.getElementById("accessTokenAPI");
-            const customQueryInput = document.getElementById("customQuery");
-            const cursorInput = document.getElementById("cursor");
-            const firstInput = document.getElementById("first");
-            const orderIdInput = document.getElementById(
-                "orderIdForTransactions"
-            );
-            const responseArea = document.getElementById("responseArea");
-            const loader = document.getElementById("loader");
+            // Update steps based on connection status
+            function updateSteps() {
+                console.log("Updating steps with:", {
+                    currentShop,
+                    currentAccessToken,
+                });
+                const step1 = document.getElementById("step1");
+                const step2 = document.getElementById("step2");
+                const collectButton = document.getElementById("collectButton");
 
-            // Update the onload function to handle the app-home redirect
+                if (currentShop && currentAccessToken) {
+                    console.log("Connection successful, updating UI");
+                    step1.classList.add("completed");
+                    step2.classList.add("active");
+                    collectButton.disabled = false;
+                    document.getElementById("connectionStatus").className =
+                        "status-badge status-connected";
+                    document.getElementById("connectionStatus").textContent =
+                        "Connected";
+                } else {
+                    console.log("Connection incomplete:", {
+                        currentShop,
+                        currentAccessToken,
+                    });
+                }
+            }
+
+            // Connect to Shopify
+            function connectShopify() {
+                const shopDomain = document
+                    .getElementById("shopDomain")
+                    .value.trim();
+                if (!shopDomain) {
+                    alert("Please enter your Shopify store domain");
+                    return;
+                }
+
+                const connectUrl = `${backendBaseUrl}/api/auth/shopify/connect?shop=${encodeURIComponent(
+                    shopDomain
+                )}`;
+                window.open(connectUrl, "_blank");
+            }
+
+            // Collect store data
+            async function collectData() {
+                if (!currentShop || !currentAccessToken) {
+                    alert("Please connect to Shopify first");
+                    return;
+                }
+
+                const loader = document.getElementById("dataLoader");
+                loader.style.display = "block";
+                document.getElementById("collectButton").disabled = true;
+
+                try {
+                    // Send parameters as query parameters
+                    const response = await fetch(
+                        `${backendBaseUrl}/api/data-pull/start?shop=${encodeURIComponent(
+                            currentShop
+                        )}&access_token=${encodeURIComponent(
+                            currentAccessToken
+                        )}`,
+                        {
+                            method: "POST",
+                            headers: {
+                                Accept: "application/json",
+                            },
+                            mode: "cors",
+                            credentials: "include",
+                        }
+                    );
+
+                    if (!response.ok) {
+                        const errorData = await response
+                            .json()
+                            .catch(() => ({}));
+                        throw new Error(
+                            errorData.message ||
+                                `HTTP error! status: ${response.status}`
+                        );
+                    }
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Start polling for the main task status
+                        pollMainTaskStatus(data.task_id);
+                    } else {
+                        throw new Error(
+                            data.message || "Failed to start data collection"
+                        );
+                    }
+                } catch (error) {
+                    console.error("Error details:", error);
+                    let errorMessage = error.message;
+
+                    // Handle CORS errors specifically
+                    if (
+                        error.message.includes("CORS") ||
+                        error.message.includes("Access-Control-Allow-Origin")
+                    ) {
+                        errorMessage =
+                            "CORS Error: Unable to connect to the backend. Please ensure the backend server is running and CORS is properly configured.";
+                    }
+
+                    alert("Error: " + errorMessage);
+                } finally {
+                    loader.style.display = "none";
+                    document.getElementById("collectButton").disabled = false;
+                }
+            }
+
+            // Poll for main task status
+            async function pollMainTaskStatus(mainTaskId) {
+                const maxAttempts = 30;
+                const interval = 3000; // 3 seconds
+
+                for (let i = 0; i < maxAttempts; i++) {
+                    try {
+                        const response = await fetch(
+                            `${backendBaseUrl}/api/data-pull/status/${mainTaskId}`,
+                            {
+                                method: "GET",
+                                headers: {
+                                    Accept: "application/json",
+                                },
+                                mode: "cors",
+                                credentials: "include",
+                            }
+                        );
+
+                        if (!response.ok) {
+                            throw new Error(
+                                `HTTP error! status: ${response.status}`
+                            );
+                        }
+
+                        const data = await response.json();
+                        console.log(
+                            `Polling main task ${mainTaskId}, Status: ${data.status}`
+                        );
+
+                        if (data.status === "completed") {
+                            // Main task completed, get sub-task IDs from its result
+                            console.log(
+                                "Main task completed, checking result:",
+                                data.result
+                            );
+                            if (data.result && data.result.tasks) {
+                                console.log(
+                                    "Sub-task IDs found, starting polling:",
+                                    data.result.tasks
+                                );
+                                pollSubTaskResults(data.result.tasks);
+                                return; // Stop polling the main task
+                            } else {
+                                console.error(
+                                    "Main task completed but result is missing task IDs.",
+                                    data
+                                );
+                                throw new Error(
+                                    "Main task completed but result is missing individual task IDs. Check backend logs."
+                                );
+                            }
+                        } else if (data.status === "failed") {
+                            throw new Error(
+                                `Main task failed: ${
+                                    data.error || "Unknown error"
+                                }`
+                            );
+                        }
+                    } catch (error) {
+                        console.error(
+                            `Error polling main task ${mainTaskId}:`,
+                            error
+                        );
+                        if (i === maxAttempts - 1) {
+                            throw new Error(
+                                `Failed to get main task status: ${error.message}`
+                            );
+                        }
+                    }
+
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, interval)
+                    );
+                }
+
+                throw new Error(
+                    `Timeout waiting for main task ${mainTaskId} to complete`
+                );
+            }
+
+            // Poll for individual sub-task results
+            async function pollSubTaskResults(taskIds) {
+                const { customers, products, orders } = taskIds;
+
+                try {
+                    // Poll for customers
+                    const customersData = await pollTaskResult(
+                        customers,
+                        "customers"
+                    );
+                    displayCustomers(customersData);
+
+                    // Poll for products
+                    const productsData = await pollTaskResult(
+                        products,
+                        "products"
+                    );
+                    displayProducts(productsData);
+
+                    // Poll for orders
+                    const ordersData = await pollTaskResult(orders, "orders");
+                    displayOrders(ordersData);
+
+                    // Mark step 2 as completed and activate step 3
+                    document.getElementById("step2").classList.add("completed");
+                    document.getElementById("step3").classList.add("active");
+                } catch (error) {
+                    alert("Error polling results: " + error.message);
+                }
+            }
+
+            // Poll individual task result
+            async function pollTaskResult(taskId, type) {
+                const maxAttempts = 60;
+                const interval = 3000; // 3 seconds
+                let failedAttempts = 0;
+                const maxFailedAttempts = 15; // Further increase max consecutive failures
+
+                for (let i = 0; i < maxAttempts; i++) {
+                    try {
+                        const response = await fetch(
+                            `${backendBaseUrl}/api/data-pull/results/${currentShop}/${taskId}?data_type=${encodeURIComponent(
+                                type
+                            )}`,
+                            {
+                                method: "GET",
+                                headers: {
+                                    Accept: "application/json",
+                                },
+                                mode: "cors",
+                                credentials: "include",
+                            }
+                        );
+
+                        if (!response.ok) {
+                            failedAttempts++;
+                            if (failedAttempts >= maxFailedAttempts) {
+                                console.error(
+                                    `Max failed attempts reached for task ${taskId} (${type}). Stopping polling.`
+                                );
+                                throw new Error(
+                                    `Failed to get ${type} data after ${maxFailedAttempts} attempts. HTTP status: ${response.status}`
+                                );
+                            }
+                            console.warn(
+                                `Attempt ${
+                                    i + 1
+                                } failed for task ${taskId} (${type}), status: ${
+                                    response.status
+                                }. Retrying...`
+                            );
+                            if (response.status !== 404) {
+                                const errorData = await response
+                                    .json()
+                                    .catch(() => ({
+                                        message:
+                                            "Could not parse error response",
+                                    }));
+                                console.error(
+                                    `Error details for task ${taskId} (${type}):`,
+                                    errorData.detail ||
+                                        errorData.message ||
+                                        "No error detail provided"
+                                );
+                            }
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, interval)
+                            );
+                            continue;
+                        }
+
+                        const data = await response.json();
+
+                        if (
+                            data.status === "completed" ||
+                            data.status === "success"
+                        ) {
+                            return data.data;
+                        } else if (data.status === "failed") {
+                            console.error(
+                                `Task ${taskId} (${type}) failed: ${
+                                    data.error || "Unknown error"
+                                }`
+                            );
+                            throw new Error(
+                                `Task ${taskId} (${type}) failed: ${
+                                    data.error || "Unknown error"
+                                }`
+                            );
+                        }
+                        failedAttempts = 0;
+                    } catch (error) {
+                        console.error(`Error polling ${type} data:`, error);
+                        if (
+                            i === maxAttempts - 1 ||
+                            failedAttempts >= maxFailedAttempts
+                        ) {
+                            throw new Error(
+                                `Failed to get ${type} data: ${error.message}`
+                            );
+                        }
+                        failedAttempts++;
+                    }
+
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, interval)
+                    );
+                }
+
+                throw new Error(`Timeout waiting for ${type} data`);
+            }
+
+            // Display functions
+            function displayCustomers(customers) {
+                const grid = document.getElementById("customersGrid");
+                grid.innerHTML = customers
+                    .map(
+                        (customer) => `
+                    <div class="data-card">
+                        <h5>${customer.firstName} ${customer.lastName}</h5>
+                        <p>Email: ${customer.email}</p>
+                        <p>Created: ${new Date(
+                            customer.createdAt
+                        ).toLocaleDateString()}</p>
+                    </div>
+                `
+                    )
+                    .join("");
+            }
+
+            function displayProducts(products) {
+                const grid = document.getElementById("productsGrid");
+                grid.innerHTML = products
+                    .map(
+                        (product) => `
+                    <div class="data-card">
+                        <h5>${product.title}</h5>
+                        <p>Type: ${product.productType}</p>
+                        <p>Vendor: ${product.vendor}</p>
+                        <p>Status: ${product.status}</p>
+                    </div>
+                `
+                    )
+                    .join("");
+            }
+
+            function displayOrders(orders) {
+                const grid = document.getElementById("ordersGrid");
+                grid.innerHTML = orders
+                    .map(
+                        (order) => `
+                    <div class="data-card">
+                        <h5>Order ${order.name}</h5>
+                        <p>Customer: ${order.customer?.email || "N/A"}</p>
+                        <p>Status: ${order.displayFinancialStatus}</p>
+                        <p>Total: ${order.totalPriceSet?.shopMoney?.amount} ${
+                            order.totalPriceSet?.shopMoney?.currencyCode
+                        }</p>
+                    </div>
+                `
+                    )
+                    .join("");
+            }
+
+            // Function to use manually entered credentials
+            function useManualCredentials() {
+                const shop = document.getElementById("manualShop").value.trim();
+                const token = document
+                    .getElementById("manualToken")
+                    .value.trim();
+
+                if (!shop || !token) {
+                    alert("Please enter both shop domain and access token");
+                    return;
+                }
+
+                currentShop = shop;
+                currentAccessToken = token;
+                document.getElementById("shopDomain").value = shop;
+                updateSteps();
+            }
+
+            // Function to copy credentials from app-home page
+            function copyFromAppHome() {
+                const shopDomain = document
+                    .querySelector('h2:contains("Shop Domain:")')
+                    .nextSibling.textContent.trim();
+                const accessToken = document
+                    .querySelector('h2:contains("Access Token:")')
+                    .nextSibling.textContent.trim();
+
+                if (shopDomain && accessToken) {
+                    document.getElementById("manualShop").value = shopDomain;
+                    document.getElementById("manualToken").value = accessToken;
+                    useManualCredentials();
+                }
+            }
+
+            // Update the message listener to handle app-home data
+            window.addEventListener("message", function (event) {
+                console.log("Received message:", event.data);
+                if (event.origin !== backendBaseUrl) {
+                    console.log(
+                        "Origin mismatch:",
+                        event.origin,
+                        backendBaseUrl
+                    );
+                    return;
+                }
+
+                if (event.data && event.data.type === "auth_success") {
+                    console.log("Auth success received:", event.data);
+                    currentShop = event.data.shop;
+                    currentAccessToken = event.data.access_token;
+                    document.getElementById("shopDomain").value = currentShop;
+                    document.getElementById("manualShop").value = currentShop;
+                    document.getElementById("manualToken").value =
+                        currentAccessToken;
+                    updateSteps();
+                }
+            });
+
+            // Add keyboard shortcut for manual credential entry
+            document.addEventListener("keydown", function (event) {
+                // Ctrl/Cmd + Shift + M to focus on manual token input
+                if (
+                    (event.ctrlKey || event.metaKey) &&
+                    event.shiftKey &&
+                    event.key === "M"
+                ) {
+                    event.preventDefault();
+                    document.getElementById("manualToken").focus();
+                }
+            });
+
+            // Check URL parameters on load
             window.onload = function () {
+                console.log("Page loaded, checking URL parameters");
                 const urlParams = new URLSearchParams(window.location.search);
                 const shop = urlParams.get("shop");
                 const accessToken = urlParams.get("access_token");
 
+                console.log("URL params:", { shop, accessToken });
+
                 if (shop && accessToken) {
-                    // Auto-populate fields
-                    shopDomainConnectInput.value = shop;
-                    shopDomainAPIInput.value = shop;
-                    accessTokenAPIInput.value = accessToken;
+                    console.log("Found shop and access token in URL");
                     currentShop = shop;
                     currentAccessToken = accessToken;
-                    updateConnectionStatus(true);
-
-                    // Clear URL parameters
-                    window.history.replaceState(
-                        {},
-                        document.title,
-                        window.location.pathname
-                    );
-                }
-            };
-
-            function updateConnectionStatus(connected) {
-                const statusElement =
-                    document.getElementById("connectionStatus");
-                if (connected) {
-                    statusElement.textContent = "Connected";
-                    statusElement.className = "status-badge status-connected";
-                } else {
-                    statusElement.textContent = "Disconnected";
-                    statusElement.className =
-                        "status-badge status-disconnected";
-                }
-            }
-
-            function connectShopify() {
-                const shopDomain = shopDomainConnectInput.value.trim();
-                if (!shopDomain) {
-                    alert("Please enter a shop domain.");
-                    return;
-                }
-                if (
-                    !backendBaseUrl ||
-                    backendBaseUrl === "YOUR_NGROK_HTTPS_URL"
-                ) {
-                    alert(
-                        "Please configure the backendBaseUrl in the script tag with your ngrok HTTPS URL."
-                    );
-                    return;
+                    document.getElementById("shopDomain").value = shop;
+                    updateSteps();
                 }
 
-                // Open auth in new tab
-                const connectUrl = `${backendBaseUrl}/api/auth/shopify/connect?shop=${encodeURIComponent(
-                    shopDomain
-                )}`;
-                console.log("Opening in new tab:", connectUrl);
-                window.open(connectUrl, "_blank");
-            }
-
-            // Listen for messages from app-home page
-            window.addEventListener("message", function (event) {
-                // Verify the origin of the message
-                if (event.origin !== backendBaseUrl) return;
-
-                // Check if the message contains auth data
-                if (event.data && event.data.type === "auth_success") {
-                    const { shop, access_token } = event.data;
-
-                    // Update the UI with the credentials
-                    shopDomainConnectInput.value = shop;
-                    shopDomainAPIInput.value = shop;
-                    accessTokenAPIInput.value = access_token;
-                    currentShop = shop;
-                    currentAccessToken = access_token;
-                    updateConnectionStatus(true);
-
-                    console.log("Credentials received and updated in test UI");
-                }
-            });
-
-            // Update the app-home page to send credentials back to test UI
-            window.onload = function () {
-                // Check if we're on the app-home page
-                if (window.location.pathname.includes("/app-home")) {
-                    const urlParams = new URLSearchParams(
-                        window.location.search
-                    );
+                // If we're on the callback page, send message to opener
+                if (window.location.pathname.includes("/callback")) {
+                    console.log("On callback page, sending message to opener");
                     const shop = urlParams.get("shop");
+                    const accessToken = urlParams.get("access_token");
 
-                    // Get the access token from the page content
-                    const accessTokenElement = document.querySelector(".value");
-                    if (accessTokenElement && shop) {
-                        const access_token = accessTokenElement.textContent;
-
-                        // Send message to the test UI tab
+                    if (shop && accessToken && window.opener) {
+                        console.log("Sending auth success message to opener");
                         window.opener.postMessage(
                             {
                                 type: "auth_success",
                                 shop: shop,
-                                access_token: access_token,
+                                access_token: accessToken,
                             },
                             backendBaseUrl
                         );
-
-                        console.log("Credentials sent to test UI");
                     }
                 }
             };
-
-            async function fetchData(apiEndpoint) {
-                if (!currentShop || !currentAccessToken) {
-                    alert(
-                        "Please connect to Shopify first using the OAuth flow."
-                    );
-                    return;
-                }
-
-                const customQuery = customQueryInput.value.trim() || null;
-                const cursor = cursorInput.value.trim() || null;
-                const first = parseInt(firstInput.value.trim()) || 10;
-
-                if (
-                    !backendBaseUrl ||
-                    backendBaseUrl ===
-                        "https://alien-adapted-gecko.ngrok-free.app"
-                ) {
-                    alert(
-                        "Please configure the backendBaseUrl in the script tag."
-                    );
-                    return;
-                }
-
-                loader.classList.remove("hidden");
-                responseArea.textContent = "Loading...";
-
-                const requestBody = {
-                    shop: currentShop,
-                    access_token: currentAccessToken,
-                    first: first,
-                    cursor: cursor,
-                    custom_query: customQuery,
-                };
-
-                console.log(
-                    "Requesting URL:",
-                    `${backendBaseUrl}${apiEndpoint}`
-                );
-                console.log(
-                    "Request Body:",
-                    JSON.stringify(requestBody, null, 2)
-                );
-
-                try {
-                    const response = await fetch(
-                        `${backendBaseUrl}${apiEndpoint}`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify(requestBody),
-                        }
-                    );
-
-                    const data = await response.json();
-                    responseArea.textContent = JSON.stringify(data, null, 2);
-
-                    if (!response.ok) {
-                        console.error("API Error:", data);
-                    }
-                } catch (error) {
-                    console.error("Fetch Error:", error);
-                    responseArea.textContent = `Error: ${error.message}\n\nCheck console for more details. Is the backend running and accessible at ${backendBaseUrl}?`;
-                } finally {
-                    loader.classList.add("hidden");
-                }
-            }
-
-            async function fetchTransactions() {
-                if (!currentShop || !currentAccessToken) {
-                    alert(
-                        "Please connect to Shopify first using the OAuth flow."
-                    );
-                    return;
-                }
-
-                const orderId = orderIdInput.value.trim();
-                const first = parseInt(firstInput.value.trim()) || 5;
-                const cursor = cursorInput.value.trim() || null;
-
-                if (
-                    !backendBaseUrl ||
-                    backendBaseUrl ===
-                        "https://alien-adapted-gecko.ngrok-free.app"
-                ) {
-                    alert(
-                        "Please configure the backendBaseUrl in the script tag."
-                    );
-                    return;
-                }
-                if (!orderId) {
-                    alert("Please enter an Order ID to fetch transactions.");
-                    return;
-                }
-
-                loader.classList.remove("hidden");
-                responseArea.textContent = "Loading...";
-
-                const requestBody = {
-                    shop: currentShop,
-                    access_token: currentAccessToken,
-                    order_id: orderId,
-                    first: first,
-                    cursor: cursor,
-                };
-
-                console.log(
-                    "Requesting URL:",
-                    `${backendBaseUrl}/api/data/shopify/transactions`
-                );
-                console.log(
-                    "Request Body for Transactions:",
-                    JSON.stringify(requestBody, null, 2)
-                );
-
-                try {
-                    const response = await fetch(
-                        `${backendBaseUrl}/api/data/shopify/transactions`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify(requestBody),
-                        }
-                    );
-
-                    const data = await response.json();
-                    responseArea.textContent = JSON.stringify(data, null, 2);
-
-                    if (!response.ok) {
-                        console.error("API Error:", data);
-                    }
-                } catch (error) {
-                    console.error("Fetch Error:", error);
-                    responseArea.textContent = `Error: ${error.message}\n\nCheck console for more details. Is the backend running and accessible at ${backendBaseUrl}?`;
-                } finally {
-                    loader.classList.add("hidden");
-                }
-            }
         </script>
     </body>
 </html>

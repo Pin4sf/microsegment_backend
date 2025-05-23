@@ -10,20 +10,19 @@ celery_app = Celery(
     "microsegment",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.tasks"]
+    include=['app.tasks.data_pull_tasks']
 )
+
+# Configure Celery
 celery_app.conf.update(
-    task_serializer="json",
-    accept_content=["json"],
-    result_serializer="json",
-    timezone="UTC",
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='UTC',
     enable_utc=True,
+    worker_pool='solo',  # Use solo pool for Windows compatibility
     task_track_started=True,
-    task_time_limit=3600,  # 1 hour
-    worker_prefetch_multiplier=1,
-    task_acks_late=True,
-    task_reject_on_worker_lost=True,
-    # Windows-specific settings
-    worker_pool_restarts=True,
-    worker_concurrency=1  # Reduce concurrency for Windows
+    task_time_limit=3600,  # 1 hour timeout
+    worker_max_tasks_per_child=1000,
+    worker_prefetch_multiplier=1
 )
