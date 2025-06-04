@@ -1,0 +1,56 @@
+{
+  "product_name": "The Videographer Snowboard",
+  "image_description": "The first image showcases a sleek snowboard with a vibrant design, featuring a mix of blue and white colors that evoke a sense of winter and adventure. The board has a glossy finish, highlighting its modern aesthetic. The second image presents the snowboard in a dynamic setting, possibly on a snowy slope, emphasizing its functionality and appeal to thrill-seekers. The background is blurred, focusing on the snowboard, which appears ready for action, suggesting it is designed for performance in snowboarding activities.",
+  "colors": [
+    "blue",
+    "white"
+  ],
+  "primary_categories": [
+    "snowboard",
+    "winter sports equipment"
+  ],
+  "style_categories": [
+    "sporty",
+    "adventurous"
+  ],
+  "occasions": [
+    "athletic",
+    "recreational"
+  ],
+  "materials": [
+    "synthetic",
+    "composite"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "graphic",
+  "fabric": null,
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "outdoor instructor"
+    ],
+    "suitable_for_age_groups": [
+      "teen",
+      "adult"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "seasonal"
+    ],
+    "styling_difficulty": "2"
+  }
+}

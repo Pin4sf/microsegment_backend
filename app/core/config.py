@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -29,10 +29,17 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://microsegment_user:1234@localhost:5432/microsegment_app_db"
     )
 
-    #Redis and Celery
+    # Redis and Celery
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+
+    # AI Settings
+    OPENROUTER_API_KEY: str = ""  # Required for AI features, set in .env
+    PERPLEXITY_API_KEY: Optional[str] = None
+    AI_MODEL_DEFAULT: str = "openai/gpt-4o-mini"  # Default AI model to use
+    AI_TASK_TIMEOUT: int = 300  # AI task timeout in seconds (5 minutes)
+    AI_OUTPUT_DIR: str = "outputs"  # Directory for AI processing outputs
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

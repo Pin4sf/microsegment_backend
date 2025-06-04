@@ -1,0 +1,56 @@
+{
+  "product_name": "The Collection Snowboard: Liquid",
+  "image_description": "The first image showcases a sleek snowboard with a vibrant liquid design, featuring a mix of blue, green, and white swirls that resemble flowing water. The board is positioned against a snowy backdrop, emphasizing its winter sports utility. The second image presents a close-up view of the snowboard's surface, highlighting the intricate details of the liquid pattern and the smooth finish, which suggests a high-quality material. The bindings are also visible, indicating that the snowboard is ready for use in winter sports activities.",
+  "colors": [
+    "blue",
+    "green",
+    "white"
+  ],
+  "primary_categories": [
+    "accessory",
+    "sport"
+  ],
+  "style_categories": [
+    "athletic",
+    "modern"
+  ],
+  "occasions": [
+    "winter",
+    "sport"
+  ],
+  "materials": [
+    "synthetic"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "liquid",
+  "fabric": "synthetic",
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "recreational sports instructor"
+    ],
+    "suitable_for_age_groups": [
+      "20-30",
+      "30-40"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "seasonal"
+    ],
+    "styling_difficulty": "2"
+  }
+}

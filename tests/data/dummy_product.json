@@ -1,0 +1,31 @@
+{
+    "title": "Minimalist Test Tee",
+    "body_html": "<p>A simple t-shirt for testing the API and processing pipeline.</p>",
+    "handle": "minimalist-test-tee",
+    "product_type": "Apparel",
+    "tags": "test, api, clothing",
+    "options": [
+        {
+            "name": "Color",
+            "values": [
+                "White",
+                "Black"
+            ]
+        },
+        {
+            "name": "Size",
+            "values": [
+                "M",
+                "L"
+            ]
+        }
+    ],
+    "images": [
+        {
+            "src": "https://via.placeholder.com/150/FFFFFF/000000?text=Test+Image+1"
+        },
+        {
+            "src": "https://via.placeholder.com/150/000000/FFFFFF?text=Test+Image+2"
+        }
+    ]
+} 

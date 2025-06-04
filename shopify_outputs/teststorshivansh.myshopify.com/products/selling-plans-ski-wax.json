@@ -1,0 +1,52 @@
+{
+  "product_name": "Selling Plans Ski Wax",
+  "image_description": "The first image showcases a vibrant blue container of ski wax, prominently displaying the brand name and product details. The container is set against a snowy backdrop, emphasizing its winter sports application. The second image features the ski wax being applied to a ski, with a close-up view that highlights the texture and consistency of the wax. The ski is partially buried in snow, reinforcing the product's intended use for winter sports enthusiasts. Both images effectively convey the product's purpose and appeal to skiers looking to enhance their performance on the slopes.",
+  "colors": [
+    "blue"
+  ],
+  "primary_categories": [
+    "accessory",
+    "sport"
+  ],
+  "style_categories": [
+    "athleisure"
+  ],
+  "occasions": [
+    "winter",
+    "athletic"
+  ],
+  "materials": [
+    "synthetic"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": null,
+  "fabric": null,
+  "care": "hand wash",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "outdoor_enthusiast"
+    ],
+    "suitable_for_age_groups": [
+      "20-40"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "timeless"
+    ],
+    "styling_difficulty": "2"
+  }
+}

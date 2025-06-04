@@ -1,0 +1,56 @@
+{
+  "product_name": "The Minimal Snowboard",
+  "image_description": "The first image showcases a sleek, modern snowboard with a minimalist design, featuring a smooth surface and a monochromatic color scheme. The board is positioned against a snowy backdrop, emphasizing its intended use in winter sports. The second image presents a close-up view of the snowboard's edge, highlighting its craftsmanship and detailing, including the bindings and texture of the board. The overall aesthetic is clean and contemporary, appealing to those who appreciate simplicity in design.",
+  "colors": [
+    "white",
+    "black"
+  ],
+  "primary_categories": [
+    "snowboard",
+    "winter sports"
+  ],
+  "style_categories": [
+    "minimalist",
+    "modern"
+  ],
+  "occasions": [
+    "athletic",
+    "recreational"
+  ],
+  "materials": [
+    "synthetic",
+    "wood"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "solid",
+  "fabric": null,
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "recreational instructor"
+    ],
+    "suitable_for_age_groups": [
+      "20-30",
+      "30-40"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "timeless"
+    ],
+    "styling_difficulty": "2"
+  }
+}

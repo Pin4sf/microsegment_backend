@@ -9,29 +9,10 @@ class PageInfo(BaseModel):
     endCursor: Optional[str] = None
 
 
-class ShopifyDataRequest(BaseModel):
-    shop: str = Field(
-        ..., description="The Shopify store domain (e.g., your-store.myshopify.com)"
-    )
-    access_token: str = Field(
-        ..., description="The Shopify access token for the store."
-    )
-    custom_query: Optional[str] = Field(
-        None,
-        description="Custom query string for filtering results (e.g., 'title:MyProduct')",
-    )
-    cursor: Optional[str] = Field(
-        None, description="Cursor for pagination to fetch the next set of results."
-    )
-    first: int = Field(
-        10, ge=1, le=250, description="Number of items to fetch per page."
-    )
-
-
-class ShopifyTransactionRequest(ShopifyDataRequest):
-    order_id: str = Field(
-        ..., description="The GraphQL ID of the order to fetch transactions for."
-    )
+# Schema for Instant Preview URL request
+class InstantPreviewURLRequest(BaseModel):
+    store_url: str = Field(...,
+                           description="The Shopify store URL for instant preview.")
 
 
 # --- Product Schemas (Simplified based on JS example) ---
@@ -159,13 +140,8 @@ class ShopifyOrderResponse(BaseModel):
 
 
 # --- Transaction Schemas (Simplified - assuming part of Order or fetched separately) ---
-# The JS example doesn't show a separate transaction fetcher, but implies it.
-# If transactions are fetched via Order, they might be part of OrderNode.
-# If fetched separately, a structure similar to Products/Orders would be needed.
-# For now, let's assume a generic response for transactions if fetched via a dedicated endpoint.
 
 
-# Example structure, needs to be defined based on actual API response
 class TransactionNode(BaseModel):
     id: str
     kind: str
@@ -242,8 +218,24 @@ class ShopifyActivateExtensionResponse(BaseModel):
 class ShopifyEventRequest(BaseModel):
     shop: dict = Field(..., description="The Shopify store Info")
     event_name: str = Field(..., description="Event Type")
-    payload: dict = Field(..., description="Information Related to the emitted event")
-    account_id: str = Field(..., description="Account Id of the webpixel event")
+    payload: dict = Field(...,
+                          description="Information Related to the emitted event")
+    account_id: str = Field(...,
+                            description="Account Id of the webpixel event")
+
+
+# Bulk data pull request
+class ShopifyBulkPullRequest(BaseModel):
+    shop: str = Field(
+        ...,
+        description="The Shopify store domain (e.g., your-store.myshopify.com)",
+        example="teststorshivansh.myshopify.com"
+    )
+    access_token: str = Field(
+        ...,
+        description="The Shopify access token for the store.",
+        example="shpat_your_access_token"
+    )
 
 
 # Generic response for API calls

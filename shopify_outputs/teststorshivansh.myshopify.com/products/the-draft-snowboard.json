@@ -1,0 +1,57 @@
+{
+  "product_name": "The Draft Snowboard",
+  "image_description": "The first image showcases a sleek snowboard with a vibrant design, featuring a mix of blue, white, and black colors. The board has a modern shape, ideal for both freestyle and all-mountain riding. The second image presents the snowboard in a snowy landscape, emphasizing its performance capabilities in winter conditions. The background highlights a snowy slope, suggesting the snowboard is designed for outdoor use in winter sports. Both images convey a sense of adventure and excitement associated with snowboarding.",
+  "colors": [
+    "blue",
+    "white",
+    "black"
+  ],
+  "primary_categories": [
+    "snowboard",
+    "winter sports"
+  ],
+  "style_categories": [
+    "sporty",
+    "adventurous"
+  ],
+  "occasions": [
+    "athletic",
+    "recreational"
+  ],
+  "materials": [
+    "synthetic",
+    "wood"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "graphic",
+  "fabric": null,
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "outdoor instructor"
+    ],
+    "suitable_for_age_groups": [
+      "teenagers",
+      "20-30"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "trendy"
+    ],
+    "styling_difficulty": "3"
+  }
+}

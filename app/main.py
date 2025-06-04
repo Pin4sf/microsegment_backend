@@ -3,6 +3,8 @@ from app.routers import (
     shopify_data_router,
     shopify_webhooks_router,
     data_pull_router,
+    ai_router,
+    instant_preview_router
 )
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -83,8 +85,16 @@ app.include_router(
     shopify_webhooks_router.router, prefix="/webhooks", tags=["Shopify Webhooks"]
 )
 
-# Add routers
+# Add AI router
+app.include_router(
+    ai_router.router, prefix="/api/ai", tags=["AI Processing"]
+)
+
+# Add data pull router
 app.include_router(data_pull_router.router)
+
+# Add instant preview router
+app.include_router(instant_preview_router.router)
 
 
 @app.get("/health", tags=["Health Check"])

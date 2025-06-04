@@ -1,0 +1,56 @@
+{
+  "product_name": "The Inventory Not Tracked Snowboard",
+  "image_description": "The first image showcases a snowboard with a sleek design, featuring a predominantly white base with abstract black and blue graphics that give it a modern and stylish look. The board appears to be well-crafted, with a smooth finish and a slightly curved tip, indicating its suitability for various snow conditions. The second image presents the snowboard in a snowy landscape, highlighting its practical use. The board is positioned on a snow-covered slope, surrounded by pine trees, suggesting an adventurous winter setting. The contrast between the board's colors and the white snow enhances its visual appeal, making it stand out as a winter sports accessory.",
+  "colors": [
+    "white",
+    "black",
+    "blue"
+  ],
+  "primary_categories": [
+    "accessory",
+    "sport"
+  ],
+  "style_categories": [
+    "modern",
+    "sporty"
+  ],
+  "occasions": [
+    "winter",
+    "athletic"
+  ],
+  "materials": [
+    "synthetic"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "abstract",
+  "fabric": "synthetic",
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "outdoor instructor"
+    ],
+    "suitable_for_age_groups": [
+      "20-30",
+      "30-40"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "seasonal"
+    ],
+    "styling_difficulty": "2"
+  }
+}

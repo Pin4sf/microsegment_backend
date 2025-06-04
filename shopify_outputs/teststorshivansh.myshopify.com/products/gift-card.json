@@ -1,0 +1,52 @@
+{
+  "product_name": "Gift Card",
+  "image_description": "The first image showcases a beautifully designed gift card featuring a vibrant and colorful design, likely with festive elements that suggest it is suitable for various occasions. The card is placed on a textured surface, enhancing its visual appeal. The second image presents the gift card in a more minimalistic setting, possibly with a soft-focus background that emphasizes the card itself. The lighting is warm, creating an inviting atmosphere, and the card appears to be slightly angled to showcase its design more effectively. Both images highlight the card's aesthetic, making it an attractive gift option.",
+  "colors": [
+    "multicolor"
+  ],
+  "primary_categories": [
+    "gift"
+  ],
+  "style_categories": [
+    "festive",
+    "minimalist"
+  ],
+  "occasions": [
+    "birthday",
+    "holiday",
+    "special_occasion"
+  ],
+  "materials": [
+    "paper"
+  ],
+  "seasons": [
+    "year_round"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "graphic",
+  "fabric": "paper",
+  "care": "none",
+  "speculations": {
+    "suitable_for_occupations": [
+      "any"
+    ],
+    "suitable_for_age_groups": [
+      "all"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "versatile"
+    ],
+    "trend_longevity": [
+      "timeless"
+    ],
+    "styling_difficulty": "1"
+  }
+}

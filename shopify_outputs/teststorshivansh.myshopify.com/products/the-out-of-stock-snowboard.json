@@ -1,0 +1,54 @@
+{
+  "product_name": "The Out of Stock Snowboard",
+  "image_description": "The first image showcases a snowboard with a sleek design, featuring a vibrant graphic that captures the essence of winter sports. The board is positioned against a snowy backdrop, emphasizing its intended use in snowy terrains. The second image presents a close-up view of the snowboard's surface, highlighting its texture and the intricate details of the graphic design. The colors are bright and eye-catching, suggesting a modern and stylish approach to snowboarding gear. Both images convey a sense of adventure and excitement associated with winter sports.",
+  "colors": [
+    "multicolor"
+  ],
+  "primary_categories": [
+    "accessory",
+    "sport"
+  ],
+  "style_categories": [
+    "athletic",
+    "adventurous"
+  ],
+  "occasions": [
+    "winter",
+    "sport"
+  ],
+  "materials": [
+    "synthetic"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "graphic",
+  "fabric": "synthetic",
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "outdoor instructor"
+    ],
+    "suitable_for_age_groups": [
+      "teen",
+      "adult"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "trendy"
+    ],
+    "styling_difficulty": "2"
+  }
+}

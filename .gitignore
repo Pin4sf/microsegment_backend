@@ -21,6 +21,7 @@ wheels/
 *.egg
 MANIFEST
 
+
 # Virtual Environment
 venv/
 .venv/

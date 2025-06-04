@@ -1,0 +1,58 @@
+{
+  "product_name": "The Archived Snowboard",
+  "image_description": "The first image showcases a sleek snowboard with a modern design, featuring a predominantly white base with abstract black and blue graphics that suggest speed and agility. The board is positioned against a snowy backdrop, emphasizing its winter sports purpose. The second image presents a close-up view of the snowboard's surface, highlighting the texture and detailing of the graphics, which include intricate patterns that enhance its aesthetic appeal. The edges of the snowboard are visible, indicating a well-crafted design suitable for performance on the slopes.",
+  "colors": [
+    "white",
+    "black",
+    "blue"
+  ],
+  "primary_categories": [
+    "sport",
+    "winter sports"
+  ],
+  "style_categories": [
+    "premium",
+    "performance"
+  ],
+  "occasions": [
+    "athletic",
+    "winter sports"
+  ],
+  "materials": [
+    "synthetic",
+    "wood"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "abstract",
+  "fabric": "synthetic",
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "recreational sports enthusiast"
+    ],
+    "suitable_for_age_groups": [
+      "20-30",
+      "30-40"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range",
+      "luxury"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "timeless"
+    ],
+    "styling_difficulty": "2"
+  }
+}

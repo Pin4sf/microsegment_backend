@@ -7,8 +7,11 @@ from typing import Dict, Any, Optional
 import requests
 import json
 import time
+from celery import shared_task
+from celery.utils.log import get_task_logger
+from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = get_task_logger(__name__)
 
 # Add this line to ensure tasks are registered
 __all__ = ['pull_customers', 'pull_products', 'pull_orders', 'pull_all_data']
@@ -29,7 +32,7 @@ def make_sync_graphql_request(shop: str, access_token: str, query: str, variable
         if not shop.endswith('.myshopify.com'):
             shop = f"{shop}.myshopify.com"
 
-        url = f"https://{shop}/admin/api/2024-01/graphql.json"
+        url = f"https://{shop}/admin/api/2025-04/graphql.json"
         logger.info(f"Making request to Shopify API: {url}")
 
         # Add retry mechanism for network issues
@@ -77,44 +80,25 @@ def make_sync_graphql_request(shop: str, access_token: str, query: str, variable
         raise
 
 
-@celery_app.task(bind=True, max_retries=3)
-def pull_customers(self, shop: str, access_token: str, batch_size: int = 100):
-    """
-    Pull all customers from a Shopify store in batches.
-    """
+@shared_task(bind=True, name="pull_customers")
+def pull_customers(self, shop: str, access_token: str) -> Dict[str, Any]:
+    """Pull customer data using bulk operations."""
     try:
-        self.update_state(state=states.STARTED, meta={
-            'status': 'Starting customer pull',
-            'shop': shop
-        })
+        self.update_state(
+            state=states.STARTED,
+            meta={
+                'current': 0,
+                'total': 'unknown',
+                'status': 'Starting customer data pull...'
+            }
+        )
 
-        all_customers = []
-        cursor = None
-        total_pulled = 0
-
-        while True:
-            try:
-                # Update progress
-                self.update_state(
-                    state=states.STARTED,
-                    meta={
-                        'status': 'Pulling customers',
-                        'total_pulled': total_pulled,
-                        'current_cursor': cursor,
-                        'shop': shop
-                    }
-                )
-
-                # Build query
-                query_parts = [f"first: {batch_size}"]
-                if cursor:
-                    query_parts.append(f'after: "{cursor}"')
-
-                query = f"""
-                query {{
-                  customers({', '.join(query_parts)}) {{
-                    edges {{
-                      node {{
+        # Start bulk operation
+        query = """
+        {
+            customers {
+                edges {
+                    node {
                         id
                         firstName
                         lastName
@@ -123,110 +107,205 @@ def pull_customers(self, shop: str, access_token: str, batch_size: int = 100):
                         tags
                         note
                         state
-                        amountSpent {{
-                          amount
-                          currencyCode
-                        }}
-                      }}
-                      cursor
-                    }}
-                    pageInfo {{
-                      hasNextPage
-                      endCursor
-                    }}
-                  }}
-                }}
-                """
-
-                # Make request
-                response = make_sync_graphql_request(shop, access_token, query)
-
-                if not response or 'data' not in response:
-                    raise Exception("Invalid response from Shopify API")
-
-                customers_data = response['data'].get('customers', {})
-                edges = customers_data.get('edges', [])
-
-                if not edges:
-                    break
-
-                # Extract customer data
-                batch_customers = [edge['node'] for edge in edges]
-                all_customers.extend(batch_customers)
-
-                # Update progress
-                total_pulled += len(batch_customers)
-
-                # Check if there are more pages
-                page_info = customers_data.get('pageInfo', {})
-                if not page_info.get('hasNextPage'):
-                    break
-
-                cursor = page_info.get('endCursor')
-
-            except Exception as e:
-                logger.error(f"Error in customer pull batch: {str(e)}")
-                raise
-
-        # Store results in Redis
-        redis_key = f"customer_pull:{shop}:{self.request.id}"
-        redis_client.set(redis_key, json.dumps(all_customers))
-        redis_client.expire(redis_key, 3600)  # Expire after 1 hour
-
-        return {
-            'status': 'completed',
-            'total_customers': len(all_customers),
-            'shop': shop
+                        amountSpent {
+                            amount
+                            currencyCode
+                        }
+                    }
+                }
+            }
         }
+        """
 
-    except Exception as exc:
-        logger.error(f"Error pulling customers for shop {shop}: {str(exc)}")
+        result = start_bulk_operation(shop, access_token, "customers")
+        if (
+            not result or
+            'data' not in result or
+            'bulkOperationRunQuery' not in result['data'] or
+            result['data']['bulkOperationRunQuery'].get('userErrors')
+        ):
+            raise Exception(
+                f"Failed to start bulk operation: "
+                f"{result['data']['bulkOperationRunQuery'].get('userErrors')}"
+            )
+
+        # Poll for completion
+        op = poll_bulk_operation(shop, access_token)
+        if op["status"] == "COMPLETED":
+            data = download_bulk_data(op["url"])
+            redis_key = f"shopify:customers:{shop}:{self.request.id}"
+            redis_client.set(
+                redis_key,
+                json.dumps(data),
+                ex=3600
+            )
+            return {
+                'success': True,
+                'count': len(data),
+                'message': f'Successfully pulled {len(data)} customers'
+            }
+        else:
+            raise Exception(
+                f"Bulk operation for customers failed: {op.get('errorCode')}")
+
+    except Exception as e:
+        logger.error(f"Error pulling customers: {str(e)}", exc_info=True)
         self.update_state(
             state=states.FAILURE,
             meta={
-                'status': 'Failed',
-                'error': str(exc),
-                'shop': shop,
-                'exc_type': type(exc).__name__
+                'error': str(e),
+                'message': f'Failed to pull customers: {str(e)}'
             }
         )
-        raise  # Re-raise the exception for Celery to handle
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f'Failed to pull customers: {str(e)}'
+        }
 
 
-@celery_app.task(bind=True, max_retries=3)
-def pull_products(self, shop: str, access_token: str, batch_size: int = 100):
+@shared_task(bind=True, name="pull_products")
+def pull_products(self, shop: str, access_token: str) -> Dict[str, Any]:
     """
-    Pull all products from a Shopify store in batches.
+    Pull product data from Shopify using bulk operations
     """
     try:
-        self.update_state(state=states.STARTED, meta={
-                          'status': 'Starting product pull'})
+        self.update_state(
+            state=states.STARTED,
+            meta={
+                'current': 0,
+                'total': 'unknown',
+                'status': 'Starting product data pull...'
+            }
+        )
 
-        all_products = []
-        cursor = None
-        total_pulled = 0
+        # Start bulk operation
+        result = start_bulk_operation(shop, access_token, "products")
+        if not result or 'data' not in result:
+            raise Exception("Failed to start bulk operation for products")
 
-        while True:
-            # Update progress
-            self.update_state(
-                state=states.STARTED,
-                meta={
-                    'status': 'Pulling products',
-                    'total_pulled': total_pulled,
-                    'current_cursor': cursor
-                }
+        # Poll for completion
+        op = poll_bulk_operation(shop, access_token)
+        if op["status"] == "COMPLETED":
+            data = download_bulk_data(op["url"])
+            redis_key = f"shopify:products:{shop}:{self.request.id}"
+            redis_client.set(
+                redis_key,
+                json.dumps(data),
+                ex=3600
             )
+            return {
+                'success': True,
+                'count': len(data),
+                'message': f'Successfully pulled {len(data)} products'
+            }
+        else:
+            raise Exception(
+                f"Bulk operation for products failed: {op.get('errorCode')}")
 
-            # Build query
-            query_parts = [f"first: {batch_size}"]
-            if cursor:
-                query_parts.append(f'after: "{cursor}"')
+    except Exception as e:
+        logger.error(
+            f"Error pulling products for shop {shop}: {str(e)}", exc_info=True)
+        self.update_state(
+            state=states.FAILURE,
+            meta={
+                'error': str(e),
+                'message': f'Failed to pull products: {str(e)}'
+            }
+        )
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f'Failed to pull products: {str(e)}'
+        }
 
-            query = f"""
-            query {{
-              products({', '.join(query_parts)}) {{
-                edges {{
-                  node {{
+
+@shared_task(bind=True, name="pull_orders")
+def pull_orders(self, shop: str, access_token: str) -> Dict[str, Any]:
+    """
+    Pull order data from Shopify using bulk operations
+    """
+    try:
+        self.update_state(
+            state=states.STARTED,
+            meta={
+                'current': 0,
+                'total': 'unknown',
+                'status': 'Starting order data pull...'
+            }
+        )
+
+        # Start bulk operation
+        result = start_bulk_operation(shop, access_token, "orders")
+        if not result or 'data' not in result:
+            raise Exception("Failed to start bulk operation for orders")
+
+        # Poll for completion
+        op = poll_bulk_operation(shop, access_token)
+        if op["status"] == "COMPLETED":
+            data = download_bulk_data(op["url"])
+            redis_key = f"shopify:orders:{shop}:{self.request.id}"
+            redis_client.set(
+                redis_key,
+                json.dumps(data),
+                ex=3600
+            )
+            return {
+                'success': True,
+                'count': len(data),
+                'message': f'Successfully pulled {len(data)} orders'
+            }
+        else:
+            raise Exception(
+                f"Bulk operation for orders failed: {op.get('errorCode')}")
+
+    except Exception as e:
+        logger.error(
+            f"Error pulling orders for shop {shop}: {str(e)}", exc_info=True)
+        self.update_state(
+            state=states.FAILURE,
+            meta={
+                'error': str(e),
+                'message': f'Failed to pull orders: {str(e)}'
+            }
+        )
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f'Failed to pull orders: {str(e)}'
+        }
+
+
+def start_bulk_operation(shop: str, access_token: str, resource: str) -> dict:
+    """Start a bulk operation for the specified resource."""
+    resource_queries = {
+        "customers": """
+            {
+              customers {
+                edges {
+                  node {
+                    id
+                    firstName
+                    lastName
+                    email
+                    createdAt
+                    tags
+                    note
+                    state
+                    amountSpent {
+                      amount
+                      currencyCode
+                    }
+                  }
+                }
+              }
+            }
+        """,
+        "products": """
+            {
+              products {
+                edges {
+                  node {
                     id
                     title
                     handle
@@ -237,212 +316,180 @@ def pull_products(self, shop: str, access_token: str, batch_size: int = 100):
                     tags
                     status
                     createdAt
-                    priceRangeV2 {{
-                      maxVariantPrice {{ amount }}
-                      minVariantPrice {{ amount }}
-                    }}
-                    variants(first: 10) {{
-                      edges {{
-                        node {{
+                    priceRangeV2 {
+                      maxVariantPrice { amount }
+                      minVariantPrice { amount }
+                    }
+                    variants(first: 10) {
+                      edges {
+                        node {
                           id
                           title
                           price
                           inventoryQuantity
-                        }}
-                      }}
-                    }}
-                  }}
-                  cursor
-                }}
-                pageInfo {{
-                  hasNextPage
-                  endCursor
-                }}
-              }}
-            }}
-            """
-
-            # Make request
-            response = make_sync_graphql_request(shop, access_token, query)
-
-            if not response or 'data' not in response:
-                break
-
-            products_data = response['data'].get('products', {})
-            edges = products_data.get('edges', [])
-
-            if not edges:
-                break
-
-            # Extract product data
-            batch_products = [edge['node'] for edge in edges]
-            all_products.extend(batch_products)
-
-            # Update progress
-            total_pulled += len(batch_products)
-
-            # Check if there are more pages
-            page_info = products_data.get('pageInfo', {})
-            if not page_info.get('hasNextPage'):
-                break
-
-            cursor = page_info.get('endCursor')
-
-        # Store results in Redis
-        redis_key = f"product_pull:{shop}:{self.request.id}"
-        redis_client.set(redis_key, json.dumps(all_products))
-        redis_client.expire(redis_key, 3600)  # Expire after 1 hour
-
-        return {
-            'status': 'completed',
-            'total_products': len(all_products),
-            'shop': shop
-        }
-
-    except Exception as exc:
-        logger.error(f"Error pulling products for shop {shop}: {exc}")
-        self.update_state(state=states.FAILURE, meta={
-                          'status': 'Failed', 'error': str(exc)})
-        self.retry(exc=exc, countdown=60)  # Retry after 1 minute
-
-
-@celery_app.task(bind=True, max_retries=3)
-def pull_orders(self, shop: str, access_token: str, batch_size: int = 100):
-    """
-    Pull all orders from a Shopify store in batches.
-    """
-    try:
-        self.update_state(state=states.STARTED, meta={
-                          'status': 'Starting order pull'})
-
-        all_orders = []
-        cursor = None
-        total_pulled = 0
-
-        while True:
-            # Update progress
-            self.update_state(
-                state=states.STARTED,
-                meta={
-                    'status': 'Pulling orders',
-                    'total_pulled': total_pulled,
-                    'current_cursor': cursor
+                        }
+                      }
+                    }
+                  }
                 }
-            )
-
-            # Build query
-            query_parts = [f"first: {batch_size}"]
-            if cursor:
-                query_parts.append(f'after: "{cursor}"')
-
-            query = f"""
-            query {{
-              orders({', '.join(query_parts)}) {{
-                edges {{
-                  node {{
+              }
+            }
+        """,
+        "orders": """
+            {
+              orders {
+                edges {
+                  node {
                     id
                     name
                     email
                     createdAt
                     displayFinancialStatus
-                    totalDiscountsSet {{ shopMoney {{ amount currencyCode }} }}
-                    totalPriceSet {{ shopMoney {{ amount currencyCode }} }}
-                    lineItems(first: 5) {{
-                      edges {{
-                        node {{
+                    totalDiscountsSet { shopMoney { amount currencyCode } }
+                    totalPriceSet { shopMoney { amount currencyCode } }
+                    lineItems(first: 5) {
+                      edges {
+                        node {
                           title
                           quantity
-                          discountedTotalSet {{ shopMoney {{ amount currencyCode }} }}
-                          originalTotalSet {{ shopMoney {{ amount currencyCode }} }}
-                        }}
-                      }}
-                    }}
-                    customer {{
+                          discountedTotalSet { shopMoney { amount currencyCode } }
+                          originalTotalSet { shopMoney { amount currencyCode } }
+                        }
+                      }
+                    }
+                    customer {
                       firstName
                       lastName
                       email
-                    }}
-                  }}
-                  cursor
-                }}
-                pageInfo {{
-                  hasNextPage
-                  endCursor
-                }}
-              }}
-            }}
-            """
+                    }
+                  }
+                }
+              }
+            }
+        """
+    }
 
-            # Make request
-            response = make_sync_graphql_request(shop, access_token, query)
-
-            if not response or 'data' not in response:
-                break
-
-            orders_data = response['data'].get('orders', {})
-            edges = orders_data.get('edges', [])
-
-            if not edges:
-                break
-
-            # Extract order data
-            batch_orders = [edge['node'] for edge in edges]
-            all_orders.extend(batch_orders)
-
-            # Update progress
-            total_pulled += len(batch_orders)
-
-            # Check if there are more pages
-            page_info = orders_data.get('pageInfo', {})
-            if not page_info.get('hasNextPage'):
-                break
-
-            cursor = page_info.get('endCursor')
-
-        # Store results in Redis
-        redis_key = f"order_pull:{shop}:{self.request.id}"
-        redis_client.set(redis_key, json.dumps(all_orders))
-        redis_client.expire(redis_key, 3600)  # Expire after 1 hour
-
-        return {
-            'status': 'completed',
-            'total_orders': len(all_orders),
-            'shop': shop
-        }
-
-    except Exception as exc:
-        logger.error(f"Error pulling orders for shop {shop}: {exc}")
-        self.update_state(state=states.FAILURE, meta={
-                          'status': 'Failed', 'error': str(exc)})
-        self.retry(exc=exc, countdown=60)  # Retry after 1 minute
-
-
-@celery_app.task(bind=True, max_retries=3)
-def pull_all_data(self, shop: str, access_token: str):
+    mutation = f"""
+    mutation {{
+      bulkOperationRunQuery(
+        query: "{resource_queries[resource]}"
+      ) {{
+        bulkOperation {{
+          id
+          status
+        }}
+        userErrors {{
+          field
+          message
+        }}
+      }}
+    }}
     """
-    Pull all data (customers, products, orders) from a Shopify store.
+    return make_sync_graphql_request(shop, access_token, mutation)
+
+
+def poll_bulk_operation(shop: str, access_token: str) -> dict:
+    """Poll the status of a bulk operation."""
+    max_attempts = 200  # ~10 minutes with 3-second intervals
+    attempts = 0
+    query = """
+     {
+       currentBulkOperation(type: QUERY) {
+         id
+         status
+         url
+         errorCode
+         objectCount
+         createdAt
+         completedAt
+       }
+     }
+     """
+    while True:
+        if attempts >= max_attempts:
+            raise TimeoutError("Bulk operation polling timed out")
+        attempts += 1
+
+        result = make_sync_graphql_request(shop, access_token, query)
+        if not result or "data" not in result or "currentBulkOperation" not in result["data"]:
+            raise ValueError(
+                f"Invalid response from bulk operation query: {result}")
+
+        op = result["data"]["currentBulkOperation"]
+        if op["status"] in ["COMPLETED", "FAILED", "CANCELED"]:
+            return op
+        time.sleep(3)
+
+
+def download_bulk_data(url: str) -> list:
+    """Download and parse bulk operation results."""
+    response = requests.get(url)
+    response.raise_for_status()
+    return [json.loads(line) for line in response.text.strip().split("\n") if line]
+
+
+@shared_task(bind=True, name="pull_all_data")
+def pull_all_data(self, shop: str, access_token: str) -> Dict[str, Any]:
+    """
+    Pull all data (customers, products, orders) from Shopify using bulk operations
     """
     try:
-        self.update_state(state=states.STARTED, meta={
-                          'status': 'Starting full data pull'})
+        self.update_state(
+            state=states.STARTED,
+            meta={
+                'current': 0,
+                'total': 3,
+                'status': 'Starting data pull...'
+            }
+        )
 
-        # Start all pull tasks
-        customer_task = pull_customers.delay(shop, access_token)
-        product_task = pull_products.delay(shop, access_token)
-        order_task = pull_orders.delay(shop, access_token)
+        # Schedule all subtasks
+        customers_task = pull_customers.apply_async(
+            args=[shop, access_token], task_id=f"{self.request.id}-customers")
+        products_task = pull_products.apply_async(
+            args=[shop, access_token], task_id=f"{self.request.id}-products")
+        orders_task = pull_orders.apply_async(
+            args=[shop, access_token], task_id=f"{self.request.id}-orders")
+
+        # Update state with task IDs
+        self.update_state(
+            state=states.STARTED,
+            meta={
+                'current': 0,
+                'total': 3,
+                'status': 'Tasks scheduled',
+                'parent_task_id': self.request.id,
+                'subtasks': {
+                    'customers': customers_task.id,
+                    'products': products_task.id,
+                    'orders': orders_task.id
+                }
+            }
+        )
 
         return {
-            'status': 'started',
-            'tasks': {
-                'customers': customer_task.id,
-                'products': product_task.id,
-                'orders': order_task.id
-            },
-            'shop': shop
+            'success': True,
+            'message': 'Data pull tasks scheduled successfully',
+            'task_id': self.request.id,
+            'subtasks': {
+                'customers': customers_task.id,
+                'products': products_task.id,
+                'orders': orders_task.id
+            }
         }
 
-    except Exception as exc:
-        logger.error(f"Error starting data pull for shop {shop}: {exc}")
-        self.update_state(state=states.FAILURE, meta={
-                          'status': 'Failed', 'error': str(exc)})
-        self.retry(exc=exc, countdown=60)  # Retry after 1 minute
+    except Exception as e:
+        logger.error(
+            f"Error pulling data for shop {shop}: {str(e)}", exc_info=True)
+        self.update_state(
+            state=states.FAILURE,
+            meta={
+                'error': str(e),
+                'message': f'Failed to pull data: {str(e)}'
+            }
+        )
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f'Failed to pull data: {str(e)}'
+        }

@@ -9,6 +9,7 @@ import json
 from app.core.config import settings
 import logging
 from app.utils.shopify_utils import generate_id
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -412,3 +413,264 @@ class ShopifyClient:
             "webPixel": {"settings": json.dumps({"accountID": generate_id()})},
         }
         return await self.make_graphql_request(query, variables)
+
+    async def start_bulk_operation(self, query: str) -> dict:
+        """Start a bulk operation with the given query."""
+        mutation = """
+        mutation {
+            bulkOperationRunQuery(
+                query: $query
+            ) {
+                bulkOperation {
+                    id
+                    status
+                }
+                userErrors {
+                    field
+                    message
+                }
+            }
+        }
+        """
+        variables = {"query": query}
+        return await self.make_graphql_request(mutation, variables)
+
+    async def poll_bulk_operation(self) -> dict:
+        """Poll the status of the current bulk operation."""
+        query = """
+        {
+            currentBulkOperation {
+                id
+                status
+                url
+                errorCode
+                objectCount
+                createdAt
+                completedAt
+            }
+        }
+        """
+        return await self.make_graphql_request(query)
+
+    async def get_bulk_data(self, url: str) -> list:
+        """Download and parse bulk operation results."""
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return [json.loads(line) for line in response.text.strip().split("\n") if line]
+
+
+def make_sync_graphql_request(shop: str, access_token: str, query: str, variables: dict = None) -> dict:
+    """Make a synchronous GraphQL request to Shopify API."""
+    try:
+        headers = {
+            "X-Shopify-Access-Token": access_token,
+            "Content-Type": "application/json",
+        }
+        payload = {"query": query}
+        if variables:
+            payload["variables"] = variables
+
+        # Ensure shop URL is properly formatted
+        if not shop.endswith('.myshopify.com'):
+            shop = f"{shop}.myshopify.com"
+
+        url = f"https://{shop}/admin/api/2025-04/graphql.json"
+        logger.info(f"Making request to Shopify API: {url}")
+
+        # Add retry mechanism for network issues
+        max_retries = 3
+        retry_delay = 5  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    verify=False,
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 429:  # Rate limit
+                    retry_after = int(response.headers.get(
+                        'Retry-After', retry_delay))
+                    logger.warning(
+                        f"Rate limited by Shopify API. Retrying after {retry_after} seconds")
+                    time.sleep(retry_after)
+                    continue
+                else:
+                    logger.error(
+                        f"Shopify API error: {response.status_code} - {response.text}")
+                    raise Exception(
+                        f"Shopify API returned status code {response.status_code}: {response.text}")
+
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        f"Request failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                    # Exponential backoff
+                    time.sleep(retry_delay * (attempt + 1))
+                    continue
+                raise
+
+        raise Exception("Max retries exceeded")
+
+    except Exception as e:
+        logger.error(f"Error in make_sync_graphql_request: {str(e)}")
+        raise
+
+
+def start_bulk_operation(shop: str, access_token: str, resource: str) -> dict:
+    """Start a bulk operation for the specified resource."""
+    resource_queries = {
+        "customers": """
+            {
+              customers {
+                edges {
+                  node {
+                    id
+                    firstName
+                    lastName
+                    email
+                    createdAt
+                    tags
+                    note
+                    state
+                    amountSpent {
+                      amount
+                      currencyCode
+                    }
+                  }
+                }
+              }
+            }
+        """,
+        "products": """
+            {
+              products {
+                edges {
+                  node {
+                    id
+                    title
+                    handle
+                    description
+                    descriptionHtml
+                    productType
+                    vendor
+                    tags
+                    status
+                    createdAt
+                    priceRangeV2 {
+                      maxVariantPrice { amount }
+                      minVariantPrice { amount }
+                    }
+                    variants(first: 10) {
+                      edges {
+                        node {
+                          id
+                          title
+                          price
+                          inventoryQuantity
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        """,
+        "orders": """
+            {
+              orders {
+                edges {
+                  node {
+                    id
+                    name
+                    email
+                    createdAt
+                    displayFinancialStatus
+                    totalDiscountsSet { shopMoney { amount currencyCode } }
+                    totalPriceSet { shopMoney { amount currencyCode } }
+                    lineItems(first: 5) {
+                      edges {
+                        node {
+                          title
+                          quantity
+                          discountedTotalSet { shopMoney { amount currencyCode } }
+                          originalTotalSet { shopMoney { amount currencyCode } }
+                        }
+                      }
+                    }
+                    customer {
+                      firstName
+                      lastName
+                      email
+                    }
+                  }
+                }
+              }
+            }
+        """
+    }
+
+    mutation = """
+    mutation($query: String!) {
+      bulkOperationRunQuery(
+        query: $query
+      ) {
+        bulkOperation {
+          id
+          status
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+    """
+    variables = {"query": resource_queries[resource]}
+    return make_sync_graphql_request(shop, access_token, mutation, variables)
+
+
+def poll_bulk_operation(shop: str, access_token: str) -> dict:
+    """Poll the status of a bulk operation."""
+    max_attempts = 200  # ~10 minutes with 3-second intervals
+    attempts = 0
+    query = """
+     {
+       currentBulkOperation(type: QUERY) {
+         id
+         status
+         url
+         errorCode
+         objectCount
+         createdAt
+         completedAt
+       }
+     }
+     """
+    while True:
+        if attempts >= max_attempts:
+            raise TimeoutError("Bulk operation polling timed out")
+        attempts += 1
+
+        result = make_sync_graphql_request(shop, access_token, query)
+        if not result or "data" not in result or "currentBulkOperation" not in result["data"]:
+            raise ValueError(
+                f"Invalid response from bulk operation query: {result}")
+
+        op = result["data"]["currentBulkOperation"]
+        if op["status"] in ["COMPLETED", "FAILED", "CANCELED"]:
+            return op
+        time.sleep(3)
+
+
+def download_bulk_data(url: str) -> list:
+    """Download and parse bulk operation results."""
+    response = requests.get(url)
+    response.raise_for_status()
+    return [json.loads(line) for line in response.text.strip().split("\n") if line]

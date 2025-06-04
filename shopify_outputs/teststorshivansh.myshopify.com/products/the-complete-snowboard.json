@@ -1,0 +1,55 @@
+{
+  "product_name": "The Complete Snowboard",
+  "image_description": "The first image showcases a sleek, modern snowboard with a vibrant design featuring a mix of blue and white colors, suggesting a winter theme. The board is positioned against a snowy backdrop, emphasizing its intended use in snow sports. The second image presents a close-up view of the snowboard's surface, highlighting intricate graphics and a smooth finish, which indicates high-quality craftsmanship. The bindings appear robust and well-designed, suitable for secure foot placement during rides. Both images effectively convey the snowboard's premium quality and winter sports functionality.",
+  "colors": [
+    "blue",
+    "white"
+  ],
+  "primary_categories": [
+    "sport",
+    "winter"
+  ],
+  "style_categories": [
+    "athletic",
+    "performance"
+  ],
+  "occasions": [
+    "athletic",
+    "winter_sports"
+  ],
+  "materials": [
+    "synthetic"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "graphic",
+  "fabric": "synthetic",
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "recreational_sports_instructor"
+    ],
+    "suitable_for_age_groups": [
+      "teenagers",
+      "adults"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "timeless"
+    ],
+    "styling_difficulty": "2"
+  }
+}

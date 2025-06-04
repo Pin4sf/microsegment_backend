@@ -1,0 +1,56 @@
+{
+  "product_name": "The Multi-managed Snowboard",
+  "image_description": "The first image showcases a sleek snowboard with a vibrant design, featuring a mix of blue, white, and black colors. The board has a glossy finish, highlighting its premium quality. The second image presents the snowboard in an action shot, with a rider performing a trick on a snowy slope, emphasizing its performance capabilities. The background is a winter landscape, filled with snow-covered trees, which adds to the overall winter sports theme. Both images effectively convey the snowboard's design and intended use in winter sports.",
+  "colors": [
+    "blue",
+    "white",
+    "black"
+  ],
+  "primary_categories": [
+    "sport",
+    "winter"
+  ],
+  "style_categories": [
+    "athletic",
+    "performance"
+  ],
+  "occasions": [
+    "athletic",
+    "recreational"
+  ],
+  "materials": [
+    "synthetic"
+  ],
+  "seasons": [
+    "winter"
+  ],
+  "neckline": null,
+  "sleeve_length": null,
+  "fit": null,
+  "pattern": "graphic",
+  "fabric": "synthetic",
+  "care": "wipe clean",
+  "speculations": {
+    "suitable_for_occupations": [
+      "athlete",
+      "recreational instructor"
+    ],
+    "suitable_for_age_groups": [
+      "20-30",
+      "30-40"
+    ],
+    "suitable_for_genders": [
+      "unisex"
+    ],
+    "price_range": [
+      "mid-range"
+    ],
+    "style_versatility": [
+      "specific"
+    ],
+    "trend_longevity": [
+      "seasonal"
+    ],
+    "styling_difficulty": "3"
+  }
+}

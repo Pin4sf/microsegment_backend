@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+huey
+openai
+python-dotenv
+requests
+tqdm 

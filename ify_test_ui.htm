@@ -301,7 +301,6 @@
                 document.getElementById("collectButton").disabled = true;
 
                 try {
-                    // Send parameters as query parameters
                     const response = await fetch(
                         `${backendBaseUrl}/api/data-pull/start?shop=${encodeURIComponent(
                             currentShop
@@ -329,20 +328,18 @@
                     }
 
                     const data = await response.json();
+                    console.log("Data pull started:", data);
 
-                    if (response.ok) {
+                    if (data.task_id) {
                         // Start polling for the main task status
                         pollMainTaskStatus(data.task_id);
                     } else {
-                        throw new Error(
-                            data.message || "Failed to start data collection"
-                        );
+                        throw new Error("No task ID received from server");
                     }
                 } catch (error) {
                     console.error("Error details:", error);
                     let errorMessage = error.message;
 
-                    // Handle CORS errors specifically
                     if (
                         error.message.includes("CORS") ||
                         error.message.includes("Access-Control-Allow-Origin")
@@ -389,25 +386,20 @@
                         );
 
                         if (data.status === "completed") {
-                            // Main task completed, get sub-task IDs from its result
-                            console.log(
-                                "Main task completed, checking result:",
-                                data.result
-                            );
                             if (data.result && data.result.tasks) {
                                 console.log(
-                                    "Sub-task IDs found, starting polling:",
+                                    "Sub-task IDs found:",
                                     data.result.tasks
                                 );
-                                pollSubTaskResults(data.result.tasks);
-                                return; // Stop polling the main task
+                                await pollSubTaskResults(data.result.tasks);
+                                return;
                             } else {
                                 console.error(
-                                    "Main task completed but result is missing task IDs.",
+                                    "Main task completed but result is missing task IDs:",
                                     data
                                 );
                                 throw new Error(
-                                    "Main task completed but result is missing individual task IDs. Check backend logs."
+                                    "Main task completed but result is missing individual task IDs"
                                 );
                             }
                         } else if (data.status === "failed") {
@@ -475,7 +467,7 @@
                 const maxAttempts = 60;
                 const interval = 3000; // 3 seconds
                 let failedAttempts = 0;
-                const maxFailedAttempts = 15; // Further increase max consecutive failures
+                const maxFailedAttempts = 15;
 
                 for (let i = 0; i < maxAttempts; i++) {
                     try {
@@ -510,20 +502,6 @@
                                     response.status
                                 }. Retrying...`
                             );
-                            if (response.status !== 404) {
-                                const errorData = await response
-                                    .json()
-                                    .catch(() => ({
-                                        message:
-                                            "Could not parse error response",
-                                    }));
-                                console.error(
-                                    `Error details for task ${taskId} (${type}):`,
-                                    errorData.detail ||
-                                        errorData.message ||
-                                        "No error detail provided"
-                                );
-                            }
                             await new Promise((resolve) =>
                                 setTimeout(resolve, interval)
                             );
@@ -532,20 +510,17 @@
 
                         const data = await response.json();
 
-                        if (
-                            data.status === "completed" ||
-                            data.status === "success"
-                        ) {
+                        if (data.success && data.data) {
                             return data.data;
-                        } else if (data.status === "failed") {
+                        } else {
                             console.error(
                                 `Task ${taskId} (${type}) failed: ${
-                                    data.error || "Unknown error"
+                                    data.message || "Unknown error"
                                 }`
                             );
                             throw new Error(
                                 `Task ${taskId} (${type}) failed: ${
-                                    data.error || "Unknown error"
+                                    data.message || "Unknown error"
                                 }`
                             );
                         }

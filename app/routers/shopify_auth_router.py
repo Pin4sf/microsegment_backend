@@ -17,10 +17,12 @@ from app.core.config import settings
 from app.utils.shopify_utils import generate_shopify_auth_url, verify_hmac
 from app.db.session import get_db
 from app.models.shop_model import Shop
+from app.models.extension_model import Extension
 from app.schemas.shopify_schemas import (
     ShopifyActivateExtensionRequest,
     ShopifyActivateExtensionResponse,
 )
+import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -239,24 +241,89 @@ async def shopify_callback(
 @router.post("/activate-extension", summary="Activates webpixel extension")
 async def activate_webpixel_extension(
     request_data: ShopifyActivateExtensionRequest = Body(...),
+    db: AsyncSession = Depends(get_db)
 ):
     try:
-        client = ShopifyClient(
-            shop=request_data.shop, access_token=request_data.access_token
-        )
-        raw_response = await client.activate_webpixel_extension()
-        if raw_response and "data" in raw_response:
-            data_content = raw_response["data"]["webPixelCreate"]
-            if len(data_content["userErrors"]) > 0:
-                print(data_content["userErrors"][0]["message"])
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"An unexpected error occurred while activating webpixel extension.",
+        # Get shop from database
+        shop_query = select(Shop).where(Shop.shop_domain == request_data.shop)
+        result = await db.execute(shop_query)
+        shop = result.scalar_one_or_none()
+
+        if not shop:
+            logger.error(f"Shop not found: {request_data.shop}")
+            raise HTTPException(status_code=404, detail="Shop not found")
+
+        # Check if extension already exists
+        extension_query = select(Extension).where(Extension.shop_id == shop.id)
+        result = await db.execute(extension_query)
+        existing_extension = result.scalar_one_or_none()
+
+        if existing_extension:
+            # Update existing extension
+            client = ShopifyClient(
+                shop=request_data.shop, access_token=request_data.access_token
+            )
+            raw_response = await client.update_extension(existing_extension.shopify_extension_id)
+
+            if raw_response and "data" in raw_response:
+                data_content = raw_response["data"]["webPixelUpdate"]
+                if len(data_content["userErrors"]) > 0:
+                    logger.error(
+                        f"Error updating extension: {data_content['userErrors'][0]['message']}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"An unexpected error occurred while updating webpixel extension.",
+                    )
+
+                # Update extension in database
+                existing_extension.status = 'active'
+                existing_extension.version = '1.0.0'  # Update version as needed
+                await db.commit()
+
+                return ShopifyActivateExtensionResponse(
+                    success=True, webPixel=data_content["webPixel"]
+                )
+        else:
+            # Create new extension
+            client = ShopifyClient(
+                shop=request_data.shop, access_token=request_data.access_token
+            )
+            raw_response = await client.activate_webpixel_extension()
+
+            if raw_response and "data" in raw_response:
+                data_content = raw_response["data"]["webPixelCreate"]
+                if len(data_content["userErrors"]) > 0:
+                    logger.error(
+                        f"Error creating extension: {data_content['userErrors'][0]['message']}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"An unexpected error occurred while activating webpixel extension.",
+                    )
+
+                # Create extension in database
+                try:
+                    settings_data = json.loads(
+                        data_content["webPixel"]["settings"])
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse webPixel settings: {e}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Failed to parse webPixel settings from Shopify response"
+                    )
+                extension = Extension(
+                    shop_id=shop.id,
+                    shopify_extension_id=data_content["webPixel"]["id"],
+                    account_id=settings_data["accountID"],
+                    status='active',
+                    version='1.0.0'
                 )
 
-            return ShopifyActivateExtensionResponse(
-                success=True, webPixel=data_content["webPixel"]
-            )
+                db.add(extension)
+                await db.commit()
+
+                return ShopifyActivateExtensionResponse(
+                    success=True, webPixel=data_content["webPixel"]
+                )
 
     except Exception as e:
         logger.error(

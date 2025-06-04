@@ -8,9 +8,10 @@ os.environ.setdefault('FORKED_BY_MULTIPROCESSING', '1')
 
 celery_app = Celery(
     "microsegment",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
-    include=['app.tasks.data_pull_tasks']
+    broker=settings.CELERY_BROKER_URL,
+    backend=settings.CELERY_RESULT_BACKEND,
+    include=['app.tasks.data_pull_tasks',
+             'app.tasks.ai_tasks']
 )
 
 # Configure Celery

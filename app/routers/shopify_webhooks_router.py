@@ -1,38 +1,20 @@
 import logging
 import json
-from fastapi import APIRouter, Request, Header, HTTPException
+from fastapi import APIRouter, Request, Header, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.utils.webhook_utils import verify_shopify_webhook_hmac
 
+# Import the Celery tasks
+from app.tasks.webhook_tasks import (
+    process_customer_data_request,
+    process_customer_redact,
+    process_shop_redact,
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-async def handle_customers_data_request(shop_domain: str, payload: dict):
-    logger.info(f"CUSTOMERS_DATA_REQUEST for shop {shop_domain}: {payload}")
-    # TODO: Implement logic to retrieve and return customer data.
-    # This might involve fetching data from Shopify using an access token for the shop.
-    # and then packaging it according to Shopify's requirements.
-    # Ensure this process is quick or use background tasks.
-    pass
-
-
-async def handle_customers_redact(shop_domain: str, payload: dict):
-    logger.info(f"CUSTOMERS_REDACT for shop {shop_domain}: {payload}")
-    # TODO: Implement logic to redact customer data from your systems.
-    # This means deleting any personally identifiable information (PII)
-    # for the customer specified in the payload.
-    pass
-
-
-async def handle_shop_redact(shop_domain: str, payload: dict):
-    logger.info(f"SHOP_REDACT for shop {shop_domain}: {payload}")
-    # TODO: Implement logic to redact all data associated with the shop.
-    # This includes deleting stored access tokens, shop-specific configurations,
-    # and any other data related to this shop.
-    pass
 
 
 @router.post("", summary="Receive Shopify Webhooks", status_code=200)
@@ -79,12 +61,13 @@ async def receive_webhook(
         f"Received webhook for shop {x_shopify_shop_domain}, topic: {x_shopify_topic}")
     # logger.debug(f"Webhook payload for {x_shopify_topic}: {payload}") # Log full payload if needed, can be verbose
 
+    # Dispatch to Celery background tasks for compliance topics
     if x_shopify_topic == "customers/data_request":
-        await handle_customers_data_request(x_shopify_shop_domain, payload)
+        process_customer_data_request.delay(x_shopify_shop_domain, payload)
     elif x_shopify_topic == "customers/redact":
-        await handle_customers_redact(x_shopify_shop_domain, payload)
+        process_customer_redact.delay(x_shopify_shop_domain, payload)
     elif x_shopify_topic == "shop/redact":
-        await handle_shop_redact(x_shopify_shop_domain, payload)
+        process_shop_redact.delay(x_shopify_shop_domain, payload)
     # Example for APP_UNINSTALLED if you add it later
     # elif x_shopify_topic == "app/uninstalled":
     #     logger.info(f"APP_UNINSTALLED for shop {x_shopify_shop_domain}: {payload}")

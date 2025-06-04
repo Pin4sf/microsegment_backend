@@ -23,6 +23,8 @@ class Shop(Base):
     updated_at = Column(DateTime(timezone=True),
                         onupdate=func.now(), server_default=func.now())
 
-    extensions = relationship("Extension", back_populates="shop", cascade="all, delete-orphan") # Added relationship
+    extensions = relationship("Extension", back_populates="shop",
+                              cascade="all, delete-orphan")  # Added relationship
+
     def __repr__(self):
         return f"<Shop(id={self.id}, shop_domain='{self.shop_domain}', is_installed={self.is_installed})>"

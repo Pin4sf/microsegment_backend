@@ -46,13 +46,9 @@ However, there's no persistent, secure storage (like a database with encryption,
 - API Authentication: Shopify OAuth is there, but authentication for your own API endpoints (if planned beyond just passing Shopify tokens) is not.
 
 ### Not Done/Pending:
-
-- Database Connection and Schema: No database integration yet. Needs ORM (e.g., SQLAlchemy), models, and migrations (e.g., Alembic).
 - Credential Secure Storage: Access tokens are not stored securely or persistently. Requires database storage with encryption.
 - Shopify Webhook Handling: Essential for app lifecycle and privacy compliance. Foundation (routing, HMAC) is DONE. Specific handlers (CUSTOMERS_DATA_REQUEST, CUSTOMERS_REDACT, SHOP_REDACT) are PENDING.
-- Server-side OAuth State Management: Current temporary dictionary is not suitable for production.
-- Background Task Processing: No system like Celery for handling asynchronous tasks.
-- Caching Strategy: No caching mechanism in place.
+- Server-side OAuth State Management: Current temporary dictionary is not suitable for production..
 
 ### Other Important Notes:
 
@@ -109,53 +105,6 @@ However, there's no persistent, secure storage (like a database with encryption,
     - **Local:** May have flexible versions.
     - **Production:** Pin all dependency versions in `requirements.txt` (e.g., `package==1.2.3`) to ensure reproducible builds and avoid unexpected updates.
 
-To check the Shopify Data endpoints use the following access_token because this have all the permissions enabled our requested callback access_token is temperory so it will not work for all the endpoints.
-
-
-For products endpoint
-{
-  "shop": "teststorshivansh.myshopify.com",
-  "access_token": "shpat_YOUR_EXAMPLE_ACCESS_TOKEN_HERE",
-  "custom_query": "snowboard",
-  "cursor": null,
-  "first": 10
-}
-
-For orders endpoint
-    {
-      "shop": "teststorshivansh.myshopify.com",
-      "access_token": "shpat_YOUR_EXAMPLE_ACCESS_TOKEN_HERE",
-      "first": 10,
-      "cursor": null,
-      "custom_query": null
-    }
-    {
-      "shop": "teststorshivansh.myshopify.com",
-      "access_token": "shpat_YOUR_EXAMPLE_ACCESS_TOKEN_HERE",
-      "first": 10,
-      "cursor": null,
-      "custom_query": "financial_status:paid"
-    }
-
-For customers endpoint
-      {
-      "shop": "teststorshivansh.myshopify.com",
-      "access_token": "shpat_YOUR_EXAMPLE_ACCESS_TOKEN_HERE",
-      "first": 10,
-      "cursor": null
-    }
-
-    For transactions endpoint
-
-  {
-  "shop": "teststorshivansh.myshopify.com",
-  "access_token": "shpat_YOUR_EXAMPLE_ACCESS_TOKEN_HERE",
-  "custom_query": null,
-  "cursor": null,
-  "first": 5,
-  "order_id": "gid://shopify/Order/6460998287582"
-    }
-
 # Project Notes & Status
 
 ## Project Overview
@@ -189,15 +138,23 @@ This is a FastAPI-based backend service for Shopify integration, handling OAuth 
   - ✅ Transaction data fetcher
   - ✅ Customer data fetcher
   - ✅ Pagination support
+  - ✅ GraphQL queries updated with variable declarations
+  - ✅ Bulk mode support added
   - ⚠️ SSL verification disabled (needs fix)
 
 ### 4. Webhook System
 - **Infrastructure**
-  - ✅ Basic webhook endpoint
+  - ✅ Basic webhook endpoint (`/webhooks`)
   - ✅ HMAC verification
   - ✅ Basic webhook task structure
-  - ⚠️ Missing GDPR handlers
+  - ✅ Celery tasks for webhook processing
+  - ✅ Background processing for webhooks
+  - ⚠️ Missing GDPR handler implementations:
+    - CUSTOMERS_DATA_REQUEST: Need to implement data fetching and packaging
+    - CUSTOMERS_REDACT: Need to implement data deletion
+    - SHOP_REDACT: Need to implement shop data cleanup
   - ⚠️ Missing app uninstallation handler
+  - ⚠️ Need robust retry mechanism with exponential backoff
 
 ### 5. Web Pixel Extension
 - **Features**
@@ -214,14 +171,24 @@ This is a FastAPI-based backend service for Shopify integration, handling OAuth 
   - ✅ Windows-specific settings
   - ✅ Basic task structure
   - ✅ Flower monitoring setup
-  - ⚠️ Task retry logic needed
-  - ⚠️ Task error handling needed
+  - ✅ Task retry logic for data pulls
+  - ✅ Task error handling for data pulls
+  - ✅ Data pull tasks (customers, products, orders) logic implemented and fixed
+  - ✅ `pull_all_data` task correctly schedules subtasks
+  - ✅ API endpoint for triggering *full* data pulls (`/api/data/shopify/bulk-pull`) is working
+  - ✅ API endpoint for checking task status (`/api/data-pull/status/{task_id}`) is working
+  - ✅ API endpoint for retrieving results for a specific task/data type (`/api/data/shopify/results/{shop}/{task_id}`) is working correctly after fixing Redis key lookup
+  - ✅ Bulk mode support added for task processing
+  - ⚠️ Webhook retry mechanism needed
+  - ⚠️ Task error handling for webhooks needed
 
 ### 7. Caching System
 - **Redis Implementation**
   - ✅ Redis server setup
   - ✅ Basic caching decorator
   - ✅ Connection pooling
+  - ✅ Redis used for storing data pull results (keyed by data type, shop, and task ID)
+  - ✅ Data retrieval from Redis for the results endpoint is now working
   - ✅ Redis connection for session management (pending implementation)
   - ⚠️ Cache invalidation needed
   - ⚠️ Performance monitoring needed
@@ -259,25 +226,19 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/2
   - Stores access token in database
   - Creates/updates shop record
 
-#### Data Fetching
-- `POST /api/data/shopify/products`
-  - Fetches product data
-  - Supports pagination
-  - Accepts custom queries
+#### Data Pulls
+- `POST /api/data/shopify/bulk-pull`
+  - **Unified endpoint to trigger a full data pull (Customers, Products, Orders) asynchronously via Celery.**
+  - Accepts shop, access token, mode ('paginated' or 'bulk'), and batch size.
+  - Returns the task ID of the main Celery task.
+  - Supports bulk modes for data fetching.
 
-- `POST /api/data/shopify/orders`
-  - Fetches order data
-  - Supports filtering
-  - Includes pagination
+- `GET /api/data-pull/status/{task_id}`
+  - Gets the status of any Celery task ID (main bulk task or specific data type subtask).
 
-- `POST /api/data/shopify/customers`
-  - Fetches customer data
-  - Supports pagination
-
-- `POST /api/data/shopify/transactions`
-  - Fetches transaction data
-  - Requires order ID
-  - Supports pagination
+- `GET /api/data/shopify/results/{shop}/{task_id}?data_type={type}`
+  - **Retrieves results for a specific data type (customers, products, or orders) for a given task ID from Redis.**
+  - Requires the shop domain, the specific subtask ID, and the data type query parameter.
 
 #### Webhooks
 - `POST /webhooks`
@@ -285,6 +246,13 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/2
   - Verifies HMAC signature
   - Routes to appropriate handlers
   - Processes in background using Celery
+  - Currently handles:
+    - CUSTOMERS_DATA_REQUEST (needs implementation)
+    - CUSTOMERS_REDACT (needs implementation)
+    - SHOP_REDACT (needs implementation)
+  - Pending:
+    - App uninstallation handler
+    - Retry mechanism with exponential backoff
 
 #### Extension Management
 - `POST /api/auth/shopify/activate-extension`
@@ -322,6 +290,18 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/2
 - **Issue**: Permission errors with default pool
 - **Workaround**: Using `--pool=solo` and `FORKED_BY_MULTIPROCESSING=1`
 - **Fix Required**: Consider using Docker for production
+
+### 6. Webhooks
+- App uninstallation webhook not handled
+- GDPR webhook handlers need implementation
+- No webhook registration on app installation
+- Missing robust retry mechanism
+
+### 7. Extension
+- Event processing pipeline not implemented
+- No rate limiting for event ingestion
+- Extension status tracking incomplete
+- Missing event validation
 
 ## Development Guidelines
 
@@ -376,78 +356,405 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/2
 - [ ] Create troubleshooting guide
 - [ ] Document security measures
 
-## Next Steps
+## Test Data
 
-### High Priority
-1. Migrate session management to Redis
-2. Implement webhook handlers for GDPR compliance
-3. Add app uninstallation handler
-4. Set up event processing pipeline
-5. Implement token encryption
+For testing the Shopify Data endpoints, use the following access token (this has all the permissions enabled):
 
-### Medium Priority
-1. Add rate limiting using Redis
-2. Configure CORS policies
-3. Implement caching for Shopify API responses
-4. Add task monitoring with Flower
-5. Implement webhook retry mechanism
+```json
+{
+  "shop": "teststorshivansh.myshopify.com",
+  "access_token": "shpat_YOUR_EXAMPLE_ACCESS_TOKEN_HERE"
+}
+```
 
-### Low Priority
-1. Add comprehensive logging
-2. Set up monitoring
-3. Create deployment documentation
-4. Add performance optimizations
-5. Implement API key authentication
+### Example Requests
 
-Todo as per (20th may 2025 23:00pm)
+#### Full Data Pull Endpoint
+```json
+POST /api/data/shopify/bulk-pull
+{
+  "shop": "teststorshivansh.myshopify.com",
+  "access_token": "shpat_YOUR_EXAMPLE_ACCESS_TOKEN_HERE",
+  "mode": "paginated", // or "bulk"
+  "batch_size": 100,
+  "custom_query": null // Only applicable to 'paginated' mode and specific resources if implemented in tasks
+}
+```
 
-# TODO
+#### Get Task Status
+```json
+GET /api/data-pull/status/{task_id}
+```
 
-## High Priority
+## AI Integration Updates
 
-1. **Web Pixel Extension Integration**
-   - [ ] Create Extension model
-   - [ ] Add Extension-Shop relationship
-   - [ ] Create event processing pipeline
-   - [ ] Implement rate limiting
-   - [ ] Add extension status tracking
+### 1. Core AI Components
+- **MicroSegment Class**
+  - ✅ Core AI processing class implemented
+  - ✅ OpenRouter API integration
+  - ✅ Product and order history analysis
+  - ✅ Batch processing support
+  - ✅ File operations for results
+  - ✅ Bulk mode support added
 
-2. **Security Enhancements**
-   - [ ] Implement token encryption
-   - [ ] Add rate limiting
-   - [ ] Configure CORS policies
-   - [ ] Fix SSL verification
+### 2. Service Layer Integration
+- **AIService**
+  - ✅ Service wrapper for MicroSegment
+  - ✅ Async methods for AI operations
+  - ✅ Singleton pattern implementation
+  - ✅ Clean interface for API layer
+  - ✅ Bulk mode support added
 
-3. **Webhook Handlers**
-   - [ ] Implement CUSTOMERS_DATA_REQUEST handler
-   - [ ] Implement CUSTOMERS_REDACT handler
-   - [ ] Implement SHOP_REDACT handler
-   - [ ] Add webhook registration logic
+### 3. Task Management
+- **Celery Integration**
+  - ✅ Migrated from Huey to Celery
+  - ✅ Background task processing
+  - ✅ Task status tracking
+  - ✅ Result handling
+  - ✅ Error management
+  - ✅ Bulk mode support added
 
-## Medium Priority
+### 4. API Layer
+- **AI Router**
+  - ✅ Product processing endpoint
+  - ✅ Order history processing endpoint
+  - ✅ Batch processing endpoint
+  - ✅ Task status endpoint
+  - ✅ Pydantic schema validation
+  - ✅ Bulk mode support added
 
-1. **Asynchronous Processing**
-   - [ ] Set up Celery
-   - [ ] Configure message broker
-   - [ ] Move webhook processing to background
-   - [ ] Add task monitoring
+### 5. Shopify Integration
+- **Data Processing Pipeline**
+  - ✅ New endpoint for processing Shopify data with AI
+  - ✅ Integration with existing data pull system
+  - ✅ Redis-based data caching
+  - ✅ Batch processing support
+  - ✅ Error handling and validation
+  - ✅ Bulk mode support added
 
-2. **Caching Implementation**
-   - [ ] Set up Redis
-   - [ ] Implement caching strategy
-   - [ ] Add cache invalidation
-   - [ ] Monitor cache performance
+### 6. Configuration
+- **Environment Variables**
+  - ✅ OpenRouter API key
+  - ✅ AI model settings
+  - ✅ Task timeout configuration
+  - ✅ Output directory settings
+  - ✅ Bulk mode settings
 
-## Low Priority
+### 7. Integration Points
+- **Backend Integration**
+  - ✅ FastAPI router integration
+  - ✅ Celery task system
+  - ✅ Redis for task results
+  - ✅ Error handling middleware
+  - ✅ Bulk mode support added
 
-1. **Documentation & Monitoring**
-   - [ ] Complete API documentation
-   - [ ] Add deployment guide
-   - [ ] Create troubleshooting guide
-   - [ ] Set up monitoring and alerting
+### 8. API Endpoints
 
-2. **Production Readiness**
-   - [ ] Configure production logging
-   - [ ] Set up backup procedures
-   - [ ] Pin dependency versions
-   - [ ] Configure SSL/TLS
+#### Product Processing
+```http
+POST /api/ai/products/process
+Content-Type: application/json
+
+{
+    "title": "Product Title",
+    "description": "Product Description",
+    "handle": "product-handle",
+    "product_type": "Product Type",
+    "tags": ["tag1", "tag2"],
+    "options": [
+        {
+            "name": "Size",
+            "values": ["S", "M", "L"]
+        }
+    ],
+    "images": [
+        {
+            "src": "https://example.com/image.jpg"
+        }
+    ],
+    "mode": "bulk" // or "paginated"
+}
+```
+
+#### Order History Processing
+```http
+POST /api/ai/orders/process
+Content-Type: application/json
+
+{
+    "customer_history": {
+        // customer data
+    },
+    "order_history": {
+        // order data
+    },
+    "mode": "bulk" // or "paginated"
+}
+```
+
+#### Batch Processing
+```http
+POST /api/ai/products/batch
+Content-Type: application/json
+
+{
+    "products": [
+        // array of products
+    ],
+    "output_dir": "outputs",
+    "mode": "bulk" // or "paginated"
+}
+```
+
+#### Shopify Data Processing
+```http
+POST /process-with-ai/{shop}/{task_id}?data_type=products&mode=bulk
+```
+or
+```http
+POST /process-with-ai/{shop}/{task_id}?data_type=orders&mode=bulk
+```
+
+#### Task Status
+```http
+GET /api/ai/tasks/{task_id}
+```
+
+### 9. Next Steps
+
+1. **High Priority**
+   - Implement AI result caching
+   - Add rate limiting for AI endpoints
+   - Implement error recovery for AI tasks
+   - Add monitoring for AI processing
+
+2. **Medium Priority**
+   - Add AI processing metrics
+   - Implement result validation
+   - Add retry mechanism for failed AI calls
+   - Create AI processing dashboard
+
+3. **Low Priority**
+   - Add AI model versioning
+   - Implement A/B testing
+   - Add result comparison tools
+   - Create AI processing documentation
+
+### 10. Known Issues
+
+1. **Performance**
+   - Large batch processing might need optimization
+   - AI model response time varies
+   - Memory usage during batch processing
+
+2. **Error Handling**
+   - Need better error messages for AI failures
+   - Retry mechanism for API timeouts
+   - Better handling of malformed responses
+
+3. **Security**
+   - API key rotation mechanism needed
+   - Rate limiting implementation pending
+   - Input validation could be enhanced
+
+### 11. Development Guidelines
+
+1. **AI Processing**
+   - Use async/await for API calls
+   - Implement proper error handling
+   - Add comprehensive logging
+   - Validate all inputs and outputs
+
+2. **Task Management**
+   - Monitor task queue size
+   - Implement task prioritization
+   - Add task timeout handling
+   - Implement task cancellation
+
+3. **Testing**
+   - Add unit tests for AI processing
+   - Implement integration tests
+   - Add performance benchmarks
+   - Test error scenarios
+
+## Task Processing Updates
+
+### Current Implementation
+1. **Synchronous Processing**
+   - Using Celery with solo pool for Windows compatibility
+   - Basic task status tracking and result retrieval
+   - Simple error handling
+   - Redis for task results storage
+   - Flower for task monitoring
+   - Bulk mode support added
+
+2. **Task Types**
+   - Data pull tasks (customers, products, orders)
+   - Webhook processing tasks
+   - AI processing tasks
+   - Instant preview tasks
+   - Bulk processing tasks
+
+3. **Task Management**
+   - Task status tracking via Redis
+   - Basic error handling and retries
+   - Task result caching
+   - Task queue management
+   - Bulk mode support added
+
+### Production Requirements
+1. **Async Processing**
+   - Migrate to gevent pool
+   - Update task functions to use async/await
+   - Implement proper async error handling
+   - Add task prioritization
+   - Set up task monitoring
+
+2. **Task Optimization**
+   - Add task timeout handling
+   - Implement task cancellation
+   - Set up task metrics
+   - Add task rate limiting
+   - Implement task error recovery
+
+3. **Monitoring & Logging**
+   - Add comprehensive task logging
+   - Set up task monitoring dashboard
+   - Create task processing documentation
+   - Add performance optimizations
+   - Implement task queue management
+
+### Development Guidelines
+
+1. **Task Implementation**
+   - Use async/await for production tasks
+   - Implement proper error handling
+   - Add comprehensive logging
+   - Validate all inputs and outputs
+   - Monitor task queue size
+
+2. **Task Management**
+   - Implement task prioritization
+   - Add task timeout handling
+   - Implement task cancellation
+   - Add unit tests for task processing
+   - Implement integration tests
+
+3. **Performance**
+   - Add performance benchmarks
+   - Test error scenarios
+   - Monitor task execution time
+   - Track resource usage
+   - Optimize task scheduling
+
+### Known Issues
+
+1. **Task Processing**
+   - Currently using synchronous processing with solo pool
+   - Need to migrate to async processing for production
+   - Task prioritization not implemented
+   - No task timeout handling
+   - Missing task cancellation support
+
+2. **Monitoring**
+   - Limited task monitoring
+   - No task metrics
+   - Basic error handling only
+   - No task rate limiting
+   - Missing task error recovery
+
+3. **Logging**
+   - Limited task logging
+   - Basic task status tracking
+   - No task result caching
+   - Missing performance metrics
+   - Incomplete error tracking
+
+### Next Steps
+
+1. **High Priority**
+   - Implement async task processing
+   - Add task prioritization
+   - Set up task monitoring
+   - Implement task timeout handling
+   - Add task cancellation support
+
+2. **Medium Priority**
+   - Add task metrics
+   - Implement task rate limiting
+   - Add task error recovery
+   - Set up task logging
+   - Implement task status tracking
+
+3. **Low Priority**
+   - Add task result caching
+   - Create task monitoring dashboard
+   - Add performance optimizations
+   - Implement task queue management
+   - Create task processing documentation
+
+### Production Checklist
+
+1. **Task Processing**
+   - [ ] Migrate to async processing
+   - [ ] Implement task prioritization
+   - [ ] Add task timeout handling
+   - [ ] Set up task monitoring
+   - [ ] Add performance metrics
+
+2. **Task Management**
+   - [ ] Implement task cancellation
+   - [ ] Add task retry mechanisms
+   - [ ] Set up task queue management
+   - [ ] Implement task rate limiting
+   - [ ] Add task error recovery
+
+3. **Monitoring & Logging**
+   - [ ] Set up task logging
+   - [ ] Implement task status tracking
+   - [ ] Add task result caching
+   - [ ] Create monitoring dashboard
+   - [ ] Add performance tracking
+
+### Example Task Implementation
+
+```python
+@celery_app.task(bind=True)
+async def example_task(self, *args, **kwargs):
+    try:
+        # Task implementation
+        result = await process_data(*args, **kwargs)
+        return result
+    except Exception as e:
+        logger.error(f"Task failed: {str(e)}")
+        raise
+```
+
+### Task Configuration
+
+```python
+app.conf.update(
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='UTC',
+    enable_utc=True,
+    task_queues=(
+        Queue('default', routing_key='default'),
+        Queue('high_priority', routing_key='high_priority'),
+    ),
+    task_routes={
+        'app.tasks.ai_tasks.*': {'queue': 'high_priority'},
+    }
+)
+```
+
+### Worker Command
+
+```bash
+# Development (Windows)
+celery -A app.core.celery_app worker --pool=solo --loglevel=info
+
+# Production
+celery -A app.core.celery_app worker --pool=gevent --concurrency=10 --loglevel=info
+```
